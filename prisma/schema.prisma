@@ -1,0 +1,185 @@
+// Payment Service Database Schema
+// Last Updated On: 2025-08-06
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Main subscription tracking model
+model UserSubscription {
+  id                   String             @id @default(uuid())
+  userId               String             @unique
+  subscriptionTier     SubscriptionTier   @default(DISCOVER)
+  stripeSubscriptionId String?            @unique
+  stripeCustomerId     String?
+  status               SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart   DateTime           @default(now())
+  currentPeriodEnd     DateTime           @default(now())
+  cancelAtPeriodEnd    Boolean            @default(false)
+  cancelledAt          DateTime?
+  planId               String?
+  trialEnd             DateTime?
+  metadata             Json?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([status])
+  @@index([userId])
+  @@index([currentPeriodEnd])
+}
+
+// Payment intent tracking
+model PaymentIntent {
+  id                    String        @id @default(uuid())
+  userId                String
+  stripePaymentIntentId String        @unique
+  amount                Int
+  currency              String        @default("usd")
+  status                PaymentStatus
+  description           String?
+  metadata              Json?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  @@index([status])
+  @@index([userId])
+  @@index([stripePaymentIntentId])
+}
+
+// Billing history and invoices
+model BillingHistory {
+  id              String        @id @default(uuid())
+  userId          String
+  stripeInvoiceId String        @unique
+  amount          Int
+  currency        String        @default("usd")
+  status          InvoiceStatus
+  description     String
+  periodStart     DateTime
+  periodEnd       DateTime
+  invoiceUrl      String?
+  receiptUrl      String?
+  pdfUrl          String?
+  createdAt       DateTime      @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Webhook event tracking for idempotency and debugging
+model WebhookEvent {
+  id             String    @id @default(uuid())
+  stripeEventId  String    @unique
+  type           String
+  payload        Json
+  status         String    @default("pending")
+  processedAt    DateTime?
+  error          String?
+  retryCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// Payment methods for users
+model PaymentMethod {
+  id                    String   @id @default(uuid())
+  userId                String
+  stripePaymentMethodId String   @unique
+  type                  String
+  brand                 String?
+  last4                 String?
+  expiryMonth           Int?
+  expiryYear            Int?
+  isDefault             Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Call usage statistics for subscription features
+model CallUsageStats {
+  id              String   @id @default(uuid())
+  userId          String
+  month           Int
+  year            Int
+  totalCalls      Int      @default(0)
+  totalMinutes    Int      @default(0)
+  videoCalls      Int      @default(0)
+  audioCalls      Int      @default(0)
+  avgCallDuration Float    @default(0)
+  callsInitiated  Int      @default(0)
+  callsReceived   Int      @default(0)
+  lastCallAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, month, year])
+  @@index([userId])
+}
+
+// Feature usage tracking for analytics
+model FeatureUsage {
+  id        String   @id @default(uuid())
+  userId    String
+  feature   String
+  count     Int      @default(1)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([feature])
+  @@index([createdAt])
+}
+
+// Subscription tier enum
+enum SubscriptionTier {
+  DISCOVER  // Free/Base tier
+  CONNECT   // Mid-tier ($19.99)
+  COMMUNITY // Premium tier ($39.99)
+}
+
+// Subscription status enum
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELED
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  PAST_DUE
+  TRIALING
+  UNPAID
+  PAUSED
+  EXPIRED
+}
+
+// Payment status enum (matches Stripe statuses)
+enum PaymentStatus {
+  requires_payment_method
+  requires_confirmation
+  requires_action
+  processing
+  requires_capture
+  canceled
+  succeeded
+  failed
+}
+
+// Invoice status enum
+enum InvoiceStatus {
+  draft
+  open
+  paid
+  uncollectible
+  void
+}

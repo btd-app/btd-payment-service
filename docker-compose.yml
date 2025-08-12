@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  btd-payment-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: btd-payment-service
+    restart: unless-stopped
+    ports:
+      - "3500:3500"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3500
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      ORCHESTRATOR_URL: ${ORCHESTRATOR_URL:-http://btd-orchestrator:3001}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://btd-auth-service:3003}
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL:-http://btd-notification-service:3006}
+    networks:
+      - btd-network
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./prisma:/app/prisma:ro
+    command: >
+      sh -c "npx prisma migrate deploy && node dist/main"
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: btd-payment-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: btd_payment
+      POSTGRES_USER: btd_user
+      POSTGRES_PASSWORD: btd_local_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - payment_postgres_data:/var/lib/postgresql/data
+    networks:
+      - btd-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: btd-payment-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - payment_redis_data:/data
+    networks:
+      - btd-network
+    command: redis-server --appendonly yes
+
+networks:
+  btd-network:
+    driver: bridge
+
+volumes:
+  payment_postgres_data:
+  payment_redis_data:
