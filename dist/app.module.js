@@ -18,6 +18,7 @@ const subscription_controller_1 = require("./controllers/subscription.controller
 const webhook_controller_1 = require("./controllers/webhook.controller");
 const stripe_service_1 = require("./services/stripe.service");
 const subscription_service_1 = require("./services/subscription.service");
+const grpc_module_1 = require("./grpc/grpc.module");
 const stripe_config_1 = require("./config/stripe.config");
 const express_1 = require("express");
 let AppModule = class AppModule {
@@ -41,6 +42,7 @@ exports.AppModule = AppModule = __decorate([
                     limit: 100,
                 }]),
             prisma_module_1.PrismaModule,
+            grpc_module_1.GrpcModule,
         ],
         controllers: [
             app_controller_1.AppController,

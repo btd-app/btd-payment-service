@@ -1,0 +1,123 @@
+syntax = "proto3";
+
+package btd.users;
+
+// User service definition
+service UsersService {
+  // Get a single user by ID
+  rpc GetUser(GetUserRequest) returns (User);
+  
+  // Get multiple users by IDs (batch operation)
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse);
+  
+  // Get user subscription information
+  rpc GetUserSubscription(GetUserSubscriptionRequest) returns (UserSubscription);
+  
+  // Update user last seen timestamp
+  rpc UpdateUserLastSeen(UpdateUserLastSeenRequest) returns (UpdateUserLastSeenResponse);
+  
+  // Check if user exists
+  rpc UserExists(UserExistsRequest) returns (UserExistsResponse);
+  
+  // Stream user updates (for real-time status)
+  rpc StreamUserUpdates(StreamUserUpdatesRequest) returns (stream UserUpdate);
+}
+
+// User message
+message User {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string name = 4;
+  string display_name = 5;
+  string bio = 6;
+  repeated string interests = 7;
+  string subscription_tier = 8;
+  string profile_image_url = 9;
+  int32 gender_spectrum = 10;
+  string gender_identity = 11;
+  bool verified = 12;
+  string created_at = 13;
+  string updated_at = 14;
+  string last_seen = 15;
+  bool is_online = 16;
+}
+
+// User subscription details
+message UserSubscription {
+  string user_id = 1;
+  string tier = 2; // DISCOVER, CONNECT, COMMUNITY
+  string status = 3; // ACTIVE, INACTIVE, CANCELLED
+  string started_at = 4;
+  string expires_at = 5;
+  map<string, bool> feature_flags = 6;
+  map<string, int32> usage_limits = 7;
+}
+
+// Request messages
+message GetUserRequest {
+  string user_id = 1;
+  repeated string fields = 2; // Optional: specify fields to return
+}
+
+message GetUsersRequest {
+  repeated string user_ids = 1;
+  repeated string fields = 2; // Optional: specify fields to return
+}
+
+message GetUsersResponse {
+  repeated User users = 1;
+  map<string, string> errors = 2; // Map of user_id to error message for failed lookups
+}
+
+message GetUserSubscriptionRequest {
+  string user_id = 1;
+}
+
+message UpdateUserLastSeenRequest {
+  string user_id = 1;
+  string timestamp = 2; // ISO 8601 format
+}
+
+message UpdateUserLastSeenResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UserExistsRequest {
+  string user_id = 1;
+}
+
+message UserExistsResponse {
+  bool exists = 1;
+}
+
+message StreamUserUpdatesRequest {
+  repeated string user_ids = 1; // Subscribe to specific users
+  repeated string event_types = 2; // e.g., "online_status", "profile_update"
+}
+
+message UserUpdate {
+  string user_id = 1;
+  string event_type = 2;
+  string timestamp = 3;
+  oneof update {
+    OnlineStatusUpdate online_status = 4;
+    ProfileUpdate profile = 5;
+    SubscriptionUpdate subscription = 6;
+  }
+}
+
+message OnlineStatusUpdate {
+  bool is_online = 1;
+  string last_seen = 2;
+}
+
+message ProfileUpdate {
+  map<string, string> changed_fields = 1;
+}
+
+message SubscriptionUpdate {
+  string new_tier = 1;
+  string status = 2;
+}

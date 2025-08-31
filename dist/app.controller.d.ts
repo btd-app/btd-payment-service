@@ -3,4 +3,12 @@ export declare class AppController {
     private readonly appService;
     constructor(appService: AppService);
     getHello(): string;
+    getHealth(): {
+        status: string;
+        timestamp: string;
+        services: {
+            database: boolean;
+            stripe: boolean;
+        };
+    };
 }

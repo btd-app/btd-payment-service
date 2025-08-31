@@ -16,6 +16,7 @@ import { SubscriptionController } from './controllers/subscription.controller';
 import { WebhookController } from './controllers/webhook.controller';
 import { StripeService } from './services/stripe.service';
 import { SubscriptionService } from './services/subscription.service';
+import { GrpcModule } from './grpc/grpc.module';
 import stripeConfig from './config/stripe.config';
 import { raw } from 'express';
 
@@ -36,6 +37,9 @@ import { raw } from 'express';
     
     // Database
     PrismaModule,
+    
+    // gRPC Module
+    GrpcModule,
   ],
   controllers: [
     AppController,

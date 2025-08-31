@@ -17,13 +17,19 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "docker:rebuild": "cd .. && docker-compose -f docker-compose.yml -f docker-compose.dev.yml stop btd-payment && docker-compose -f docker-compose.yml -f docker-compose.dev.yml rm -f btd-payment && docker-compose -f docker-compose.yml -f docker-compose.dev.yml build --no-cache btd-payment && docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d btd-payment",
+    "docker:build": "cd .. && docker-compose -f docker-compose.yml -f docker-compose.dev.yml build btd-payment",
+    "docker:logs": "cd .. && docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f btd-payment"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.13.4",
+    "@grpc/proto-loader": "^0.8.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/microservices": "^11.1.6",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.2.0",
     "@nestjs/throttler": "^6.4.0",

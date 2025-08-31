@@ -40,7 +40,11 @@ let WebhookController = WebhookController_1 = class WebhookController {
         }
         let event;
         try {
-            event = this.stripe.webhooks.constructEvent(req.rawBody || Buffer.from(''), signature, this.endpointSecret);
+            const rawBody = req.rawBody || req.body || Buffer.from('');
+            this.logger.debug(`Processing webhook with signature: ${signature.substring(0, 20)}...`);
+            this.logger.debug(`Raw body type: ${typeof rawBody}, length: ${Buffer.isBuffer(rawBody) ? rawBody.length : 'unknown'}`);
+            const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
+            event = this.stripe.webhooks.constructEvent(bodyBuffer, signature, this.endpointSecret);
         }
         catch (err) {
             this.logger.error(`Webhook signature verification failed: ${err.message}`);
@@ -327,7 +331,7 @@ __decorate([
 ], WebhookController.prototype, "handleStripeWebhook", null);
 exports.WebhookController = WebhookController = WebhookController_1 = __decorate([
     (0, swagger_1.ApiTags)('Webhooks'),
-    (0, common_1.Controller)('api/v1/webhooks'),
+    (0, common_1.Controller)('webhooks'),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         config_1.ConfigService])
 ], WebhookController);
