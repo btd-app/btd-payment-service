@@ -19,7 +19,7 @@ async function bootstrap() {
       protoPath: join(__dirname, 'proto/payment.proto'),
       url: `0.0.0.0:${grpcPort}`,
       loader: {
-        keepCase: false,
+        keepCase: true, // CRITICAL: Keep snake_case field names from proto files
         longs: String,
         enums: String,
         defaults: true,

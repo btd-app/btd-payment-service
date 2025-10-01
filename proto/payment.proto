@@ -1,0 +1,203 @@
+syntax = "proto3";
+
+package btd.payment;
+
+// Payment Service - Handles all payment processing including Apple App Store
+service PaymentService {
+  // Apple App Store Operations
+  rpc ValidateAppleReceipt(ValidateAppleReceiptRequest) returns (ValidateAppleReceiptResponse);
+  rpc ProcessAppleWebhook(ProcessAppleWebhookRequest) returns (ProcessAppleWebhookResponse);
+  rpc ProcessConsumablePurchase(ProcessConsumablePurchaseRequest) returns (ProcessConsumablePurchaseResponse);
+
+  // Subscription Management
+  rpc GetUserSubscription(GetUserSubscriptionRequest) returns (GetUserSubscriptionResponse);
+  rpc UpdateSubscriptionStatus(UpdateSubscriptionStatusRequest) returns (UpdateSubscriptionStatusResponse);
+  rpc CancelSubscription(CancelSubscriptionRequest) returns (CancelSubscriptionResponse);
+
+  // Transaction Management
+  rpc GetTransactionHistory(GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse);
+  rpc RecordTransaction(RecordTransactionRequest) returns (RecordTransactionResponse);
+
+  // Health Check
+  rpc GetHealth(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Request/Response Messages
+
+message ValidateAppleReceiptRequest {
+  string receipt_data = 1;
+  string user_id = 2;
+  string source = 3; // "app_store"
+}
+
+message ValidateAppleReceiptResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+  string error_message = 3;
+}
+
+message ProcessAppleWebhookRequest {
+  string signed_payload = 1;
+  map<string, string> headers = 2;
+}
+
+message ProcessAppleWebhookResponse {
+  bool success = 1;
+  string notification_type = 2;
+  string action_taken = 3;
+  string error_message = 4;
+}
+
+message ProcessConsumablePurchaseRequest {
+  string user_id = 1;
+  string product_id = 2;
+  string transaction_id = 3;
+  string receipt_data = 4;
+}
+
+message ProcessConsumablePurchaseResponse {
+  bool success = 1;
+  ConsumableGrant granted = 2;
+  string error_message = 3;
+}
+
+message GetUserSubscriptionRequest {
+  string user_id = 1;
+}
+
+message GetUserSubscriptionResponse {
+  bool has_subscription = 1;
+  Subscription subscription = 2;
+  PremiumFeatures features = 3;
+  Usage usage = 4;
+}
+
+message UpdateSubscriptionStatusRequest {
+  string user_id = 1;
+  string status = 2;
+  string reason = 3;
+}
+
+message UpdateSubscriptionStatusResponse {
+  bool success = 1;
+  Subscription subscription = 2;
+}
+
+message CancelSubscriptionRequest {
+  string user_id = 1;
+  string reason = 2;
+  bool immediate = 3;
+}
+
+message CancelSubscriptionResponse {
+  bool success = 1;
+  string cancellation_date = 2;
+}
+
+message GetTransactionHistoryRequest {
+  string user_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message GetTransactionHistoryResponse {
+  repeated Transaction transactions = 1;
+  int32 total = 2;
+}
+
+message RecordTransactionRequest {
+  string user_id = 1;
+  string transaction_id = 2;
+  string product_id = 3;
+  string type = 4; // "subscription" or "consumable"
+  double amount = 5;
+  string currency = 6;
+}
+
+message RecordTransactionResponse {
+  bool success = 1;
+  Transaction transaction = 2;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string timestamp = 2;
+  string version = 3;
+}
+
+// Data Models
+
+message Subscription {
+  string id = 1;
+  string user_id = 2;
+  SubscriptionPlan plan = 3;
+  string status = 4; // active, expired, cancelled, billing_retry
+  string start_date = 5;
+  string end_date = 6;
+  string next_billing_date = 7;
+  bool auto_renew = 8;
+  bool is_trial = 9;
+  string apple_product_id = 10;
+  string apple_transaction_id = 11;
+  string apple_original_transaction_id = 12;
+}
+
+message SubscriptionPlan {
+  string id = 1;
+  string name = 2;
+  string tier = 3; // basic, plus, gold, platinum
+  string duration = 4; // monthly, annual
+  Price price = 5;
+  repeated Feature features = 6;
+}
+
+message Price {
+  double amount = 1;
+  string currency = 2;
+  string formatted = 3;
+}
+
+message Feature {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+}
+
+message PremiumFeatures {
+  bool unlimited_likes = 1;
+  bool who_liked_me = 2;
+  bool top_picks = 3;
+  bool rewind = 4;
+  bool passport = 5;
+  bool incognito = 6;
+  int32 daily_super_likes_limit = 7;
+  int32 daily_boosts_limit = 8;
+}
+
+message Usage {
+  int32 boosts_remaining = 1;
+  int32 super_likes_remaining = 2;
+  int32 daily_likes_used = 3;
+  int32 daily_super_likes_used = 4;
+}
+
+message ConsumableGrant {
+  string type = 1; // "boost" or "super_like"
+  int32 quantity = 2;
+}
+
+message Transaction {
+  string id = 1;
+  string user_id = 2;
+  string transaction_id = 3;
+  string original_transaction_id = 4;
+  string product_id = 5;
+  string type = 6;
+  double amount = 7;
+  string currency = 8;
+  string status = 9;
+  string processed_at = 10;
+  string created_at = 11;
+}

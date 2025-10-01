@@ -6,8 +6,10 @@
  */
 
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import '../types/external';
 import { PrismaClient } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
+import '../types/prisma-extended';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -28,8 +30,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    * Connect to database on module initialization
    */
   async onModuleInit() {
-    await this.$connect();
-    console.log('✅ Connected to payment database');
+    try {
+      await this.$connect();
+      console.log('✅ Connected to payment database');
+    } catch (error) {
+      console.warn('⚠️  Database connection failed, running without database:', error.message);
+    }
   }
 
   /**
@@ -49,12 +55,12 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     const models = [
       'featureUsage',
-      'callUsageStats',
+      // 'callUsageStats', // This belongs in video-call service
       'paymentMethod',
       'webhookEvent',
       'billingHistory',
       'paymentIntent',
-      'userSubscription',
+      'subscription',
     ];
 
     for (const model of models) {

@@ -24,6 +24,7 @@ import {
   ApiExcludeEndpoint,
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import '../types/external';
 import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionStatus, SubscriptionTier, InvoiceStatus } from '@prisma/client';
@@ -40,7 +41,7 @@ export class WebhookController {
     private readonly configService: ConfigService,
   ) {
     this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY') || '', {
-      apiVersion: '2025-07-30.basil',
+      apiVersion: '2025-08-27.basil',
     });
     this.endpointSecret = this.configService.get('STRIPE_WEBHOOK_SECRET') || '';
   }
@@ -87,9 +88,10 @@ export class WebhookController {
     // Store webhook event for auditing
     await this.prisma.webhookEvent.create({
       data: {
+        eventId: event.id,
         stripeEventId: event.id,
         type: event.type,
-        payload: event as any, // Store full event
+        data: event as any, // Store full event
         processedAt: new Date(),
       },
     });
@@ -181,7 +183,7 @@ export class WebhookController {
     const subscription = event.data.object as any;
     
     // Find user by Stripe customer ID
-    const userSub = await this.prisma.userSubscription.findFirst({
+    const userSub = await this.prisma.subscription.findFirst({
       where: { stripeCustomerId: subscription.customer },
     });
 
@@ -191,7 +193,7 @@ export class WebhookController {
     }
 
     // Update subscription details
-    await this.prisma.userSubscription.update({
+    await this.prisma.subscription.update({
       where: { id: userSub.id },
       data: {
         stripeSubscriptionId: subscription.id,
@@ -214,7 +216,7 @@ export class WebhookController {
   private async handleSubscriptionUpdated(event: Stripe.Event) {
     const subscription = event.data.object as any;
     
-    const userSub = await this.prisma.userSubscription.findFirst({
+    const userSub = await this.prisma.subscription.findFirst({
       where: { stripeSubscriptionId: subscription.id },
     });
 
@@ -226,7 +228,7 @@ export class WebhookController {
     // Determine tier from price ID
     const tier = this.getTierFromPriceId(subscription.items.data[0]?.price?.id);
 
-    await this.prisma.userSubscription.update({
+    await this.prisma.subscription.update({
       where: { id: userSub.id },
       data: {
         subscriptionTier: tier,
@@ -249,7 +251,7 @@ export class WebhookController {
   private async handleSubscriptionDeleted(event: Stripe.Event) {
     const subscription = event.data.object as any;
     
-    const userSub = await this.prisma.userSubscription.findFirst({
+    const userSub = await this.prisma.subscription.findFirst({
       where: { stripeSubscriptionId: subscription.id },
     });
 
@@ -258,10 +260,10 @@ export class WebhookController {
       return;
     }
 
-    await this.prisma.userSubscription.update({
+    await this.prisma.subscription.update({
       where: { id: userSub.id },
       data: {
-        status: SubscriptionStatus.CANCELED,
+        status: SubscriptionStatus.CANCELLED,
         subscriptionTier: SubscriptionTier.DISCOVER,
         cancelledAt: new Date(),
       },
@@ -291,7 +293,7 @@ export class WebhookController {
     const invoice = event.data.object as any;
     
     // Find user by customer ID
-    const userSub = await this.prisma.userSubscription.findFirst({
+    const userSub = await this.prisma.subscription.findFirst({
       where: { stripeCustomerId: invoice.customer },
     });
 
@@ -305,9 +307,10 @@ export class WebhookController {
       data: {
         userId: userSub.userId,
         stripeInvoiceId: invoice.id,
+        type: 'subscription_payment',
         amount: invoice.amount_paid,
         currency: invoice.currency,
-        status: InvoiceStatus.paid,
+        status: InvoiceStatus.PAID,
         description: invoice.description || `Subscription payment`,
         periodStart: new Date(invoice.period_start * 1000),
         periodEnd: new Date(invoice.period_end * 1000),
@@ -327,7 +330,7 @@ export class WebhookController {
   private async handleInvoicePaymentFailed(event: Stripe.Event) {
     const invoice = event.data.object as any;
     
-    const userSub = await this.prisma.userSubscription.findFirst({
+    const userSub = await this.prisma.subscription.findFirst({
       where: { stripeCustomerId: invoice.customer },
     });
 
@@ -341,9 +344,10 @@ export class WebhookController {
       data: {
         userId: userSub.userId,
         stripeInvoiceId: invoice.id,
+        type: 'subscription_payment',
         amount: invoice.amount_due,
         currency: invoice.currency,
-        status: InvoiceStatus.uncollectible,
+        status: InvoiceStatus.UNCOLLECTIBLE,
         description: `Payment failed - ${invoice.description || 'Subscription payment'}`,
         periodStart: new Date(invoice.period_start * 1000),
         periodEnd: new Date(invoice.period_end * 1000),
@@ -398,7 +402,7 @@ export class WebhookController {
     const paymentMethod = event.data.object as any;
     
     // Find user by customer ID
-    const userSub = await this.prisma.userSubscription.findFirst({
+    const userSub = await this.prisma.subscription.findFirst({
       where: { stripeCustomerId: paymentMethod.customer },
     });
 
@@ -467,15 +471,15 @@ export class WebhookController {
   private mapStripeStatus(stripeStatus: string): SubscriptionStatus {
     const statusMap: Record<string, SubscriptionStatus> = {
       'active': SubscriptionStatus.ACTIVE,
-      'past_due': SubscriptionStatus.PAST_DUE,
-      'canceled': SubscriptionStatus.CANCELED,
-      'incomplete': SubscriptionStatus.INCOMPLETE,
+      'canceled': SubscriptionStatus.CANCELLED,
+      'incomplete': SubscriptionStatus.PENDING,
       'incomplete_expired': SubscriptionStatus.EXPIRED,
-      'trialing': SubscriptionStatus.TRIALING,
-      'unpaid': SubscriptionStatus.PAST_DUE,
+      'trialing': SubscriptionStatus.ACTIVE,
+      'unpaid': SubscriptionStatus.BILLING_RETRY,
+      'past_due': SubscriptionStatus.BILLING_RETRY,
     };
 
-    return statusMap[stripeStatus] || SubscriptionStatus.INACTIVE;
+    return statusMap[stripeStatus] || SubscriptionStatus.PENDING;
   }
 
   /**

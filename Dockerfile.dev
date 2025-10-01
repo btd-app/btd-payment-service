@@ -1,0 +1,30 @@
+FROM node:20-alpine
+
+# Install OpenSSL for Prisma compatibility
+RUN apk add --no-cache openssl libssl3 libcrypto3
+
+WORKDIR /app
+
+# Copy package files and npmrc for private registry
+COPY package*.json .npmrc ./
+
+# Install dependencies
+RUN npm install --force
+
+# Copy prisma schema
+COPY prisma ./prisma
+
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy application code
+COPY . .
+
+# Build the application
+RUN npm run build
+
+# Expose ports
+EXPOSE 3500 50058
+
+# Start the application in development mode
+CMD ["npm", "run", "start:dev"]

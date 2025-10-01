@@ -23,6 +23,8 @@
     "docker:logs": "cd .. && docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f btd-payment"
   },
   "dependencies": {
+    "@btd/proto": "^2.0.0",
+    "@btd/shared": "^2.1.0",
     "@grpc/grpc-js": "^1.13.4",
     "@grpc/proto-loader": "^0.8.0",
     "@nestjs/axios": "^4.0.1",
@@ -31,6 +33,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/microservices": "^11.1.6",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/schedule": "^5.0.0",
     "@nestjs/swagger": "^11.2.0",
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.13.0",
@@ -45,6 +48,7 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "stripe": "^18.4.0",
+    "uuid": "^9.0.1",
     "winston": "^3.17.0"
   },
   "devDependencies": {

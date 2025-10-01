@@ -150,7 +150,7 @@ export class PaymentGrpcController {
       );
 
       // Get subscription details from database
-      const dbSubscription = await this.prisma.userSubscription.findUnique({
+      const dbSubscription = await this.prisma.subscription.findUnique({
         where: { userId: data.userId },
       });
 
@@ -202,7 +202,7 @@ export class PaymentGrpcController {
       );
 
       // Get updated subscription from database
-      const dbSubscription = await this.prisma.userSubscription.findUnique({
+      const dbSubscription = await this.prisma.subscription.findUnique({
         where: { userId: data.userId },
       });
 
@@ -243,7 +243,7 @@ export class PaymentGrpcController {
       await this.stripeService.cancelSubscription(data.userId, data.cancelImmediately);
 
       // Get updated subscription from database
-      const dbSubscription = await this.prisma.userSubscription.findUnique({
+      const dbSubscription = await this.prisma.subscription.findUnique({
         where: { userId: data.userId },
       });
 
@@ -278,7 +278,7 @@ export class PaymentGrpcController {
 
     try {
       // Get subscription from database
-      const dbSubscription = await this.prisma.userSubscription.findUnique({
+      const dbSubscription = await this.prisma.subscription.findUnique({
         where: { userId: data.userId },
       });
 

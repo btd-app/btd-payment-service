@@ -29,8 +29,13 @@ let PrismaService = class PrismaService extends client_1.PrismaClient {
         this.configService = configService;
     }
     async onModuleInit() {
-        await this.$connect();
-        console.log('✅ Connected to payment database');
+        try {
+            await this.$connect();
+            console.log('✅ Connected to payment database');
+        }
+        catch (error) {
+            console.warn('⚠️  Database connection failed, running without database:', error.message);
+        }
     }
     async onModuleDestroy() {
         await this.$disconnect();
