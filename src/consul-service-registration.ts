@@ -16,24 +16,52 @@ export class ConsulServiceRegistration implements OnModuleInit, OnModuleDestroy 
 
   constructor(private readonly configService: ConfigService) {}
 
+  /**
+   * Check if Consul is reachable before attempting registration
+   */
+  private async checkConsulHealth(consulUrl: string): Promise<boolean> {
+    try {
+      const axios = require('axios');
+      const response = await axios.get(`${consulUrl}/v1/status/leader`, {
+        timeout: 5000,
+      });
+      return response.status === 200;
+    } catch (error) {
+      this.logger.error(`Consul health check failed for ${consulUrl}: ${error.message}`);
+      return false;
+    }
+  }
+
   async onModuleInit(): Promise<void> {
     this.logger.log('🏛️ Initializing Consul Service Registration...');
 
+    // Build Consul URL from environment variables
+    const consulHost = this.configService.get('CONSUL_HOST') ?? '10.27.27.27';
+    const consulPort = this.configService.get('CONSUL_PORT') ?? '8500';
+    const consulUrl = `http://${consulHost}:${consulPort}`;
+
+    // Verify Consul is reachable before attempting registration
+    const consulHealthy = await this.checkConsulHealth(consulUrl);
+    if (!consulHealthy) {
+      this.logger.warn(`⚠️ Consul not reachable at ${consulUrl}, service will run without discovery`);
+      return;
+    }
+
     const config: ConsulServiceRegistrationConfig = {
       serviceName: 'btd-payment-service',
-      version: this.configService.get('SERVICE_VERSION', '1.0.0'),
-      host: this.configService.get('HOST', 'localhost'),
-      port: this.configService.get('PORT', 3011),
-      grpcPort: this.configService.get('GRPC_PORT', 50055),
+      version: this.configService.get('SERVICE_VERSION') ?? '1.0.0',
+      host: this.configService.get('HOST') ?? 'localhost',
+      port: this.configService.get('PORT') ?? 3011,
+      grpcPort: this.configService.get('GRPC_PORT') ?? 50055,
       protocol: 'http',
       tags: ['payment', 'stripe', 'billing', 'microservice', 'btd'],
       metadata: {
         description: 'Payment service for BTD platform',
-        environment: this.configService.get('NODE_ENV', 'development'),
+        environment: this.configService.get('NODE_ENV') ?? 'development',
         buildVersion: process.env.BUILD_VERSION || 'unknown',
-        region: this.configService.get('REGION', 'us-east-1')
+        region: this.configService.get('REGION') ?? 'us-east-1'
       },
-      consulUrl: this.configService.get('CONSUL_URL', 'http://localhost:8500'),
+      consulUrl: consulUrl,
       healthCheckPath: '/health',
       healthCheckInterval: '30s',
       healthCheckTimeout: '10s',
