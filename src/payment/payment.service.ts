@@ -16,8 +16,8 @@ export class PaymentService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {
-    this.environment = this.config.get<string>('NODE_ENV', 'development');
-    this.applePassword = this.config.get<string>('APPLE_SHARED_SECRET', '');
+    this.environment = this.config.get('NODE_ENV') ?? 'development';
+    this.applePassword = this.config.get('APPLE_SHARED_SECRET') ?? '';
 
     this.appleVerifyUrl = this.environment === 'production'
       ? 'https://buy.itunes.apple.com/verifyReceipt'
@@ -228,10 +228,10 @@ export class PaymentService {
       const subscription = await this.prisma.subscription.findFirst({
         where: {
           userId: data.user_id,
-          status: 'active',
+          status: 'ACTIVE',
         },
         orderBy: {
-          expiresAt: 'desc',
+          currentPeriodEnd: 'desc',
         },
       });
 
@@ -270,7 +270,7 @@ export class PaymentService {
       const subscription = await this.prisma.subscription.findFirst({
         where: {
           userId: data.user_id,
-          status: 'active',
+          status: 'ACTIVE',
         },
       });
 
@@ -281,8 +281,8 @@ export class PaymentService {
       const updated = await this.prisma.subscription.update({
         where: { id: subscription.id },
         data: {
-          status: data.status,
-          cancelledAt: data.status === 'cancelled' ? new Date() : undefined,
+          status: data.status as any,
+          cancelledAt: data.status === 'CANCELLED' ? new Date() : undefined,
         },
       });
 
@@ -309,7 +309,7 @@ export class PaymentService {
       const subscription = await this.prisma.subscription.findFirst({
         where: {
           userId: data.user_id,
-          status: 'active',
+          status: 'ACTIVE',
         },
       });
 
@@ -317,12 +317,12 @@ export class PaymentService {
         throw new Error('No active subscription found');
       }
 
-      const cancellationDate = data.immediate ? new Date() : subscription.expiresAt;
+      const cancellationDate = data.immediate ? new Date() : subscription.currentPeriodEnd;
 
       await this.prisma.subscription.update({
         where: { id: subscription.id },
         data: {
-          status: data.immediate ? 'cancelled' : 'active',
+          status: data.immediate ? 'CANCELLED' : 'ACTIVE',
           autoRenew: false,
           cancelledAt: new Date(),
         },
@@ -392,8 +392,8 @@ export class PaymentService {
       subscription = await this.prisma.subscription.update({
         where: { id: subscription.id },
         data: {
-          status: 'active',
-          expiresAt,
+          status: 'ACTIVE',
+          currentPeriodEnd: expiresAt,
           appleTransactionId: transactionId,
           lastRenewedAt: new Date(),
         },
@@ -403,13 +403,13 @@ export class PaymentService {
       subscription = await this.prisma.subscription.create({
         data: {
           userId,
-          tier,
-          status: 'active',
+          subscriptionTier: tier,
+          status: 'ACTIVE',
           appleProductId: productId,
           appleTransactionId: transactionId,
           appleOriginalTransactionId: originalTransactionId,
-          startsAt: new Date(),
-          expiresAt,
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: expiresAt,
           autoRenew: receiptInfo.is_in_billing_retry_period === 'false',
           isTrial: receiptInfo.is_trial_period === 'true',
           isIntroOffer: receiptInfo.is_in_intro_offer_period === 'true',
@@ -436,12 +436,12 @@ export class PaymentService {
     return subscription;
   }
 
-  private getTierFromProductId(productId: string): string {
-    if (productId.includes('platinum')) return 'platinum';
-    if (productId.includes('gold')) return 'gold';
-    if (productId.includes('plus')) return 'plus';
-    if (productId.includes('basic')) return 'basic';
-    return 'free';
+  private getTierFromProductId(productId: string): 'DISCOVER' | 'CONNECT' | 'COMMUNITY' {
+    // Map Apple product IDs to subscription tiers
+    if (productId.includes('community') || productId.includes('platinum')) return 'COMMUNITY';
+    if (productId.includes('connect') || productId.includes('gold')) return 'CONNECT';
+    if (productId.includes('discover') || productId.includes('plus') || productId.includes('basic')) return 'DISCOVER';
+    return 'DISCOVER';
   }
 
   private async updateUserFeatures(userId: string, tier: string) {
@@ -654,9 +654,9 @@ export class PaymentService {
     await this.prisma.subscription.updateMany({
       where: { appleOriginalTransactionId: originalTransactionId },
       data: {
-        expiresAt: new Date(parseInt(expiresDate)),
+        currentPeriodEnd: new Date(parseInt(expiresDate)),
         lastRenewedAt: new Date(),
-        status: 'active',
+        status: 'ACTIVE',
       },
     });
 
@@ -668,7 +668,7 @@ export class PaymentService {
 
     await this.prisma.subscription.updateMany({
       where: { appleOriginalTransactionId: originalTransactionId },
-      data: { status: 'expired' },
+      data: { status: 'EXPIRED' },
     });
 
     return 'Subscription expired';
@@ -686,7 +686,7 @@ export class PaymentService {
     // Cancel subscription
     await this.prisma.subscription.updateMany({
       where: { appleOriginalTransactionId: originalTransactionId },
-      data: { status: 'cancelled' },
+      data: { status: 'CANCELLED' },
     });
 
     return 'Refund processed';
@@ -697,7 +697,7 @@ export class PaymentService {
 
     await this.prisma.subscription.updateMany({
       where: { appleOriginalTransactionId: originalTransactionId },
-      data: { status: 'billing_retry' },
+      data: { status: 'BILLING_RETRY' },
     });
 
     return 'Marked as billing retry';
