@@ -11,6 +11,7 @@ import { Observable, Subject } from 'rxjs';
 import { SubscriptionService } from '../services/subscription.service';
 import { StripeService } from '../services/stripe.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SubscriptionTier } from '@prisma/client';
 
 // Interfaces matching proto definitions
 interface CreateSubscriptionRequest {
@@ -337,7 +338,7 @@ export class PaymentGrpcController {
           stripePaymentIntentId: paymentIntent.paymentIntentId,
           amount: data.amount,
           currency: data.currency,
-          status: 'processing',
+          status: 'PENDING',
           description: data.description,
           metadata: data.metadata || {},
         },
@@ -496,7 +497,7 @@ export class PaymentGrpcController {
 
       // Transform to gRPC format with feature details from subscription service
       const plans: PricingPlan[] = Object.values(stripePlans).map(plan => {
-        const features = this.subscriptionService.getSubscriptionFeatures(plan.tier);
+        const features = this.subscriptionService.getSubscriptionFeatures(plan.tier as SubscriptionTier);
         
         return {
           id: plan.id,
@@ -589,7 +590,7 @@ export class PaymentGrpcController {
           // Update payment intent status in database
           await this.prisma.paymentIntent.updateMany({
             where: { stripePaymentIntentId: data.objectId },
-            data: { status: 'succeeded' },
+            data: { status: 'SUCCEEDED' },
           });
           this.emitPaymentEvent('webhook_payment_succeeded', data.userId, {
             eventId: data.eventId,
@@ -602,7 +603,7 @@ export class PaymentGrpcController {
         case 'payment_intent.payment_failed':
           await this.prisma.paymentIntent.updateMany({
             where: { stripePaymentIntentId: data.objectId },
-            data: { status: 'failed' },
+            data: { status: 'FAILED' },
           });
           this.emitPaymentEvent('webhook_payment_failed', data.userId, {
             eventId: data.eventId,

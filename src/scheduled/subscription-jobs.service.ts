@@ -36,8 +36,8 @@ export class SubscriptionJobsService {
       // Find subscriptions that have expired
       const expiredSubscriptions = await this.prisma.subscription.findMany({
         where: {
-          status: 'active',
-          expiresAt: {
+          status: 'ACTIVE',
+          currentPeriodEnd: {
             lt: new Date(),
           },
         },
@@ -47,7 +47,7 @@ export class SubscriptionJobsService {
         // Update subscription status
         await this.prisma.subscription.update({
           where: { id: subscription.id },
-          data: { status: 'expired' },
+          data: { status: 'EXPIRED' },
         });
 
         // Reset user features to free tier
@@ -84,8 +84,8 @@ export class SubscriptionJobsService {
       // Find subscriptions in billing retry status
       const retrySubscriptions = await this.prisma.subscription.findMany({
         where: {
-          status: 'billing_retry',
-          expiresAt: {
+          status: 'BILLING_RETRY',
+          currentPeriodEnd: {
             gt: new Date(),
           },
         },

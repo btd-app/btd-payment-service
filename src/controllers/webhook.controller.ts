@@ -370,7 +370,7 @@ export class WebhookController {
     await this.prisma.paymentIntent.updateMany({
       where: { stripePaymentIntentId: paymentIntent.id },
       data: {
-        status: 'succeeded',
+        status: 'SUCCEEDED',
         updatedAt: new Date(),
       },
     });
@@ -387,7 +387,7 @@ export class WebhookController {
     await this.prisma.paymentIntent.updateMany({
       where: { stripePaymentIntentId: paymentIntent.id },
       data: {
-        status: 'failed',
+        status: 'FAILED',
         updatedAt: new Date(),
       },
     });
