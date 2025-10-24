@@ -138,7 +138,7 @@ export class SubscriptionController {
     }
     
     if (dto.planId) {
-      await this.stripeService.updateSubscription(userId, dto.cancelAtPeriodEnd);
+      await this.stripeService.updateSubscription(userId, dto.planId, dto.cancelAtPeriodEnd);
       // Return updated subscription
       const subscription = await this.stripeService.getCurrentSubscription(userId);
       return {
