@@ -1,7 +1,7 @@
 /**
  * Main Application Module
  * Configures all modules, services, and middleware for the payment service
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
@@ -37,10 +37,12 @@ import { ConsulServiceRegistration } from './consul-service-registration';
     ScheduleModule.forRoot(),
 
     // Rate limiting
-    ThrottlerModule.forRoot([{
-      ttl: 60000,
-      limit: 100,
-    }]),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
 
     // Database
     PrismaModule,

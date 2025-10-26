@@ -1,7 +1,7 @@
 /**
  * Webhook Controller
  * Handles Stripe webhook events
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
@@ -17,17 +17,16 @@ import {
   RawBodyRequest,
   Req,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiExcludeEndpoint,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import '../types/external';
 import Stripe from 'stripe';
 import { PrismaService } from '../prisma/prisma.service';
-import { SubscriptionStatus, SubscriptionTier, InvoiceStatus } from '@prisma/client';
+import {
+  SubscriptionStatus,
+  SubscriptionTier,
+  InvoiceStatus,
+} from '@prisma/client';
 
 @ApiTags('Webhooks')
 @Controller('webhooks')
@@ -40,9 +39,12 @@ export class WebhookController {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
   ) {
-    this.stripe = new Stripe(this.configService.get('STRIPE_SECRET_KEY') || '', {
-      apiVersion: '2025-08-27.basil',
-    });
+    this.stripe = new Stripe(
+      this.configService.get('STRIPE_SECRET_KEY') || '',
+      {
+        apiVersion: '2025-08-27.basil',
+      },
+    );
     this.endpointSecret = this.configService.get('STRIPE_WEBHOOK_SECRET') || '';
   }
 
@@ -67,13 +69,19 @@ export class WebhookController {
     try {
       // Get raw body - try different ways NestJS might provide it
       const rawBody = req.rawBody || req.body || Buffer.from('');
-      
-      this.logger.debug(`Processing webhook with signature: ${signature.substring(0, 20)}...`);
-      this.logger.debug(`Raw body type: ${typeof rawBody}, length: ${Buffer.isBuffer(rawBody) ? rawBody.length : 'unknown'}`);
-      
+
+      this.logger.debug(
+        `Processing webhook with signature: ${signature.substring(0, 20)}...`,
+      );
+      this.logger.debug(
+        `Raw body type: ${typeof rawBody}, length: ${Buffer.isBuffer(rawBody) ? rawBody.length : 'unknown'}`,
+      );
+
       // Ensure rawBody is a Buffer
-      const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody as unknown as string);
-      
+      const bodyBuffer = Buffer.isBuffer(rawBody)
+        ? rawBody
+        : Buffer.from(rawBody as unknown as string);
+
       // Verify webhook signature
       event = this.stripe.webhooks.constructEvent(
         bodyBuffer,
@@ -81,7 +89,10 @@ export class WebhookController {
         this.endpointSecret,
       );
     } catch (err) {
-      this.logger.error(`Webhook signature verification failed: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error(
+        `Webhook signature verification failed: ${errorMessage}`,
+      );
       throw new BadRequestException('Invalid webhook signature');
     }
 
@@ -91,7 +102,8 @@ export class WebhookController {
         eventId: event.id,
         stripeEventId: event.id,
         type: event.type,
-        data: event as any, // Store full event
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        data: JSON.parse(JSON.stringify(event)), // Store full event - Prisma JSON type quirk
         processedAt: new Date(),
       },
     });
@@ -112,7 +124,7 @@ export class WebhookController {
           break;
 
         case 'customer.subscription.trial_will_end':
-          await this.handleTrialWillEnd(event);
+          this.handleTrialWillEnd(event);
           break;
 
         case 'invoice.payment_succeeded':
@@ -140,11 +152,11 @@ export class WebhookController {
           break;
 
         case 'charge.dispute.created':
-          await this.handleDisputeCreated(event);
+          this.handleDisputeCreated(event);
           break;
 
         case 'charge.dispute.closed':
-          await this.handleDisputeClosed(event);
+          this.handleDisputeClosed(event);
           break;
 
         default:
@@ -156,16 +168,19 @@ export class WebhookController {
         where: { stripeEventId: event.id },
         data: { status: 'processed' },
       });
-
     } catch (error) {
-      this.logger.error(`Error processing webhook event ${event.id}: ${error.message}`);
-      
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Error processing webhook event ${event.id}: ${errorMessage}`,
+      );
+
       // Mark event as failed
       await this.prisma.webhookEvent.updateMany({
         where: { stripeEventId: event.id },
-        data: { 
+        data: {
           status: 'failed',
-          error: error.message,
+          error: errorMessage,
         },
       });
 
@@ -179,18 +194,30 @@ export class WebhookController {
   /**
    * Handle subscription created event
    */
-  private async handleSubscriptionCreated(event: Stripe.Event) {
-    const subscription = event.data.object as any;
-    
+  private async handleSubscriptionCreated(event: Stripe.Event): Promise<void> {
+    const subscription = event.data.object as Stripe.Subscription;
+
     // Find user by Stripe customer ID
+    const customerId =
+      typeof subscription.customer === 'string'
+        ? subscription.customer
+        : subscription.customer?.id;
+
     const userSub = await this.prisma.subscription.findFirst({
-      where: { stripeCustomerId: subscription.customer },
+      where: { stripeCustomerId: customerId },
     });
 
     if (!userSub) {
-      this.logger.error(`No user found for customer ${subscription.customer}`);
+      this.logger.error(`No user found for customer ${customerId}`);
       return;
     }
+
+    // Extract subscription data with proper types
+    const subscriptionData = subscription as unknown as {
+      current_period_start: number;
+      current_period_end: number;
+      cancel_at_period_end: boolean;
+    };
 
     // Update subscription details
     await this.prisma.subscription.update({
@@ -198,24 +225,26 @@ export class WebhookController {
       data: {
         stripeSubscriptionId: subscription.id,
         status: this.mapStripeStatus(subscription.status),
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        currentPeriodStart: new Date(
+          subscriptionData.current_period_start * 1000,
+        ),
+        currentPeriodEnd: new Date(subscriptionData.current_period_end * 1000),
+        cancelAtPeriodEnd: subscriptionData.cancel_at_period_end,
         planId: subscription.items.data[0]?.price?.id,
       },
     });
 
     this.logger.log(`Subscription created for user ${userSub.userId}`);
-    
+
     // TODO: Publish event to Redis for other services
   }
 
   /**
    * Handle subscription updated event
    */
-  private async handleSubscriptionUpdated(event: Stripe.Event) {
-    const subscription = event.data.object as any;
-    
+  private async handleSubscriptionUpdated(event: Stripe.Event): Promise<void> {
+    const subscription = event.data.object as Stripe.Subscription;
+
     const userSub = await this.prisma.subscription.findFirst({
       where: { stripeSubscriptionId: subscription.id },
     });
@@ -226,31 +255,41 @@ export class WebhookController {
     }
 
     // Determine tier from price ID
-    const tier = this.getTierFromPriceId(subscription.items.data[0]?.price?.id);
+    const priceId = subscription.items.data[0]?.price?.id ?? '';
+    const tier = this.getTierFromPriceId(priceId);
+
+    // Extract subscription data with proper types
+    const subscriptionData = subscription as unknown as {
+      current_period_start: number;
+      current_period_end: number;
+      cancel_at_period_end: boolean;
+    };
 
     await this.prisma.subscription.update({
       where: { id: userSub.id },
       data: {
         subscriptionTier: tier,
         status: this.mapStripeStatus(subscription.status),
-        currentPeriodStart: new Date(subscription.current_period_start * 1000),
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-        cancelAtPeriodEnd: subscription.cancel_at_period_end,
-        planId: subscription.items.data[0]?.price?.id,
+        currentPeriodStart: new Date(
+          subscriptionData.current_period_start * 1000,
+        ),
+        currentPeriodEnd: new Date(subscriptionData.current_period_end * 1000),
+        cancelAtPeriodEnd: subscriptionData.cancel_at_period_end,
+        planId: priceId,
       },
     });
 
     this.logger.log(`Subscription updated for user ${userSub.userId}`);
-    
+
     // TODO: Publish event to Redis for other services
   }
 
   /**
    * Handle subscription deleted event
    */
-  private async handleSubscriptionDeleted(event: Stripe.Event) {
-    const subscription = event.data.object as any;
-    
+  private async handleSubscriptionDeleted(event: Stripe.Event): Promise<void> {
+    const subscription = event.data.object as Stripe.Subscription;
+
     const userSub = await this.prisma.subscription.findFirst({
       where: { stripeSubscriptionId: subscription.id },
     });
@@ -270,18 +309,18 @@ export class WebhookController {
     });
 
     this.logger.log(`Subscription cancelled for user ${userSub.userId}`);
-    
+
     // TODO: Publish event to Redis for other services
   }
 
   /**
    * Handle trial will end event
    */
-  private async handleTrialWillEnd(event: Stripe.Event) {
-    const subscription = event.data.object as any;
-    
+  private handleTrialWillEnd(event: Stripe.Event): void {
+    const subscription = event.data.object as Stripe.Subscription;
+
     this.logger.log(`Trial ending soon for subscription ${subscription.id}`);
-    
+
     // TODO: Send email notification to user
     // TODO: Publish event to notification service
   }
@@ -289,16 +328,23 @@ export class WebhookController {
   /**
    * Handle invoice payment succeeded event
    */
-  private async handleInvoicePaymentSucceeded(event: Stripe.Event) {
-    const invoice = event.data.object as any;
-    
+  private async handleInvoicePaymentSucceeded(
+    event: Stripe.Event,
+  ): Promise<void> {
+    const invoice = event.data.object as Stripe.Invoice;
+
     // Find user by customer ID
+    const customerId =
+      typeof invoice.customer === 'string'
+        ? invoice.customer
+        : invoice.customer?.id;
+
     const userSub = await this.prisma.subscription.findFirst({
-      where: { stripeCustomerId: invoice.customer },
+      where: { stripeCustomerId: customerId },
     });
 
     if (!userSub) {
-      this.logger.error(`No user found for customer ${invoice.customer}`);
+      this.logger.error(`No user found for customer ${customerId}`);
       return;
     }
 
@@ -308,34 +354,39 @@ export class WebhookController {
         userId: userSub.userId,
         stripeInvoiceId: invoice.id,
         type: 'subscription_payment',
-        amount: invoice.amount_paid,
-        currency: invoice.currency,
+        amount: invoice.amount_paid ?? 0,
+        currency: invoice.currency ?? 'usd',
         status: InvoiceStatus.PAID,
-        description: invoice.description || `Subscription payment`,
-        periodStart: new Date(invoice.period_start * 1000),
-        periodEnd: new Date(invoice.period_end * 1000),
-        invoiceUrl: invoice.hosted_invoice_url,
-        pdfUrl: invoice.invoice_pdf,
+        description: invoice.description ?? 'Subscription payment',
+        periodStart: new Date((invoice.period_start ?? 0) * 1000),
+        periodEnd: new Date((invoice.period_end ?? 0) * 1000),
+        invoiceUrl: invoice.hosted_invoice_url ?? undefined,
+        pdfUrl: invoice.invoice_pdf ?? undefined,
       },
     });
 
     this.logger.log(`Payment succeeded for user ${userSub.userId}`);
-    
+
     // TODO: Send receipt email
   }
 
   /**
    * Handle invoice payment failed event
    */
-  private async handleInvoicePaymentFailed(event: Stripe.Event) {
-    const invoice = event.data.object as any;
-    
+  private async handleInvoicePaymentFailed(event: Stripe.Event): Promise<void> {
+    const invoice = event.data.object as Stripe.Invoice;
+
+    const customerId =
+      typeof invoice.customer === 'string'
+        ? invoice.customer
+        : invoice.customer?.id;
+
     const userSub = await this.prisma.subscription.findFirst({
-      where: { stripeCustomerId: invoice.customer },
+      where: { stripeCustomerId: customerId },
     });
 
     if (!userSub) {
-      this.logger.error(`No user found for customer ${invoice.customer}`);
+      this.logger.error(`No user found for customer ${customerId}`);
       return;
     }
 
@@ -345,17 +396,17 @@ export class WebhookController {
         userId: userSub.userId,
         stripeInvoiceId: invoice.id,
         type: 'subscription_payment',
-        amount: invoice.amount_due,
-        currency: invoice.currency,
+        amount: invoice.amount_due ?? 0,
+        currency: invoice.currency ?? 'usd',
         status: InvoiceStatus.UNCOLLECTIBLE,
-        description: `Payment failed - ${invoice.description || 'Subscription payment'}`,
-        periodStart: new Date(invoice.period_start * 1000),
-        periodEnd: new Date(invoice.period_end * 1000),
+        description: `Payment failed - ${invoice.description ?? 'Subscription payment'}`,
+        periodStart: new Date((invoice.period_start ?? 0) * 1000),
+        periodEnd: new Date((invoice.period_end ?? 0) * 1000),
       },
     });
 
     this.logger.log(`Payment failed for user ${userSub.userId}`);
-    
+
     // TODO: Send payment failed email
     // TODO: Publish event for subscription degradation
   }
@@ -363,9 +414,11 @@ export class WebhookController {
   /**
    * Handle payment intent succeeded event
    */
-  private async handlePaymentIntentSucceeded(event: Stripe.Event) {
-    const paymentIntent = event.data.object as any;
-    
+  private async handlePaymentIntentSucceeded(
+    event: Stripe.Event,
+  ): Promise<void> {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
     // Update payment intent record
     await this.prisma.paymentIntent.updateMany({
       where: { stripePaymentIntentId: paymentIntent.id },
@@ -381,9 +434,9 @@ export class WebhookController {
   /**
    * Handle payment intent failed event
    */
-  private async handlePaymentIntentFailed(event: Stripe.Event) {
-    const paymentIntent = event.data.object as any;
-    
+  private async handlePaymentIntentFailed(event: Stripe.Event): Promise<void> {
+    const paymentIntent = event.data.object as Stripe.PaymentIntent;
+
     await this.prisma.paymentIntent.updateMany({
       where: { stripePaymentIntentId: paymentIntent.id },
       data: {
@@ -398,16 +451,23 @@ export class WebhookController {
   /**
    * Handle payment method attached event
    */
-  private async handlePaymentMethodAttached(event: Stripe.Event) {
-    const paymentMethod = event.data.object as any;
-    
+  private async handlePaymentMethodAttached(
+    event: Stripe.Event,
+  ): Promise<void> {
+    const paymentMethod = event.data.object as Stripe.PaymentMethod;
+
     // Find user by customer ID
+    const customerId =
+      typeof paymentMethod.customer === 'string'
+        ? paymentMethod.customer
+        : paymentMethod.customer?.id;
+
     const userSub = await this.prisma.subscription.findFirst({
-      where: { stripeCustomerId: paymentMethod.customer },
+      where: { stripeCustomerId: customerId },
     });
 
     if (!userSub) {
-      this.logger.error(`No user found for customer ${paymentMethod.customer}`);
+      this.logger.error(`No user found for customer ${customerId}`);
       return;
     }
 
@@ -417,10 +477,10 @@ export class WebhookController {
         userId: userSub.userId,
         stripePaymentMethodId: paymentMethod.id,
         type: paymentMethod.type,
-        brand: paymentMethod.card?.brand,
-        last4: paymentMethod.card?.last4,
-        expiryMonth: paymentMethod.card?.exp_month,
-        expiryYear: paymentMethod.card?.exp_year,
+        brand: paymentMethod.card?.brand ?? undefined,
+        last4: paymentMethod.card?.last4 ?? undefined,
+        expiryMonth: paymentMethod.card?.exp_month ?? undefined,
+        expiryYear: paymentMethod.card?.exp_year ?? undefined,
         isDefault: false,
       },
     });
@@ -431,9 +491,11 @@ export class WebhookController {
   /**
    * Handle payment method detached event
    */
-  private async handlePaymentMethodDetached(event: Stripe.Event) {
-    const paymentMethod = event.data.object as any;
-    
+  private async handlePaymentMethodDetached(
+    event: Stripe.Event,
+  ): Promise<void> {
+    const paymentMethod = event.data.object as Stripe.PaymentMethod;
+
     // Delete payment method record
     await this.prisma.paymentMethod.deleteMany({
       where: { stripePaymentMethodId: paymentMethod.id },
@@ -445,11 +507,14 @@ export class WebhookController {
   /**
    * Handle dispute created event
    */
-  private async handleDisputeCreated(event: Stripe.Event) {
-    const dispute = event.data.object as any;
-    
-    this.logger.warn(`Dispute created: ${dispute.id} for charge ${dispute.charge}`);
-    
+  private handleDisputeCreated(event: Stripe.Event): void {
+    const dispute = event.data.object as Stripe.Dispute;
+
+    const chargeId =
+      typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id;
+
+    this.logger.warn(`Dispute created: ${dispute.id} for charge ${chargeId}`);
+
     // TODO: Notify admin
     // TODO: Temporarily restrict user account
   }
@@ -457,11 +522,13 @@ export class WebhookController {
   /**
    * Handle dispute closed event
    */
-  private async handleDisputeClosed(event: Stripe.Event) {
-    const dispute = event.data.object as any;
-    
-    this.logger.log(`Dispute closed: ${dispute.id} - Status: ${dispute.status}`);
-    
+  private handleDisputeClosed(event: Stripe.Event): void {
+    const dispute = event.data.object as Stripe.Dispute;
+
+    this.logger.log(
+      `Dispute closed: ${dispute.id} - Status: ${dispute.status}`,
+    );
+
     // TODO: Update user account status based on dispute outcome
   }
 
@@ -470,13 +537,13 @@ export class WebhookController {
    */
   private mapStripeStatus(stripeStatus: string): SubscriptionStatus {
     const statusMap: Record<string, SubscriptionStatus> = {
-      'active': SubscriptionStatus.ACTIVE,
-      'canceled': SubscriptionStatus.CANCELLED,
-      'incomplete': SubscriptionStatus.PENDING,
-      'incomplete_expired': SubscriptionStatus.EXPIRED,
-      'trialing': SubscriptionStatus.ACTIVE,
-      'unpaid': SubscriptionStatus.BILLING_RETRY,
-      'past_due': SubscriptionStatus.BILLING_RETRY,
+      active: SubscriptionStatus.ACTIVE,
+      canceled: SubscriptionStatus.CANCELLED,
+      incomplete: SubscriptionStatus.PENDING,
+      incomplete_expired: SubscriptionStatus.EXPIRED,
+      trialing: SubscriptionStatus.ACTIVE,
+      unpaid: SubscriptionStatus.BILLING_RETRY,
+      past_due: SubscriptionStatus.BILLING_RETRY,
     };
 
     return statusMap[stripeStatus] || SubscriptionStatus.PENDING;
@@ -488,12 +555,12 @@ export class WebhookController {
   private getTierFromPriceId(priceId: string): SubscriptionTier {
     // These should match your Stripe price IDs
     const priceToTierMap: Record<string, SubscriptionTier> = {
-      'price_discover_monthly': SubscriptionTier.DISCOVER,
-      'price_discover_yearly': SubscriptionTier.DISCOVER,
-      'price_connect_monthly': SubscriptionTier.CONNECT,
-      'price_connect_yearly': SubscriptionTier.CONNECT,
-      'price_community_monthly': SubscriptionTier.COMMUNITY,
-      'price_community_yearly': SubscriptionTier.COMMUNITY,
+      price_discover_monthly: SubscriptionTier.DISCOVER,
+      price_discover_yearly: SubscriptionTier.DISCOVER,
+      price_connect_monthly: SubscriptionTier.CONNECT,
+      price_connect_yearly: SubscriptionTier.CONNECT,
+      price_community_monthly: SubscriptionTier.COMMUNITY,
+      price_community_yearly: SubscriptionTier.COMMUNITY,
     };
 
     return priceToTierMap[priceId] || SubscriptionTier.DISCOVER;

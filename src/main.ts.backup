@@ -3,13 +3,14 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { join } from 'path';
+import { ConsulServiceRegistrar } from '@btd/shared/service-registration/consul-service-registrar';
 import { CorrelationIdMiddleware } from './shared/middleware/correlation-id.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     rawBody: true, // Enable raw body for webhook signature verification
   });
-
+  
   // Configure gRPC microservice
   const grpcPort = process.env.GRPC_PORT || '50055';
   app.connectMicroservice<MicroserviceOptions>({
@@ -39,15 +40,7 @@ async function bootstrap() {
     origin: process.env.FRONTEND_URL || 'http://localhost:8100',
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: [
-      'Content-Type',
-      'Authorization',
-      'X-Requested-With',
-      'X-Correlation-ID',
-      'X-Request-ID',
-      'X-Calling-Service',
-      'X-Internal-Key',
-    ],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Correlation-ID', 'X-Request-ID', 'X-Calling-Service', 'X-Internal-Key'],
   });
 
   // Global prefix
@@ -57,9 +50,7 @@ async function bootstrap() {
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('BTD Payment Service')
-      .setDescription(
-        'Comprehensive payment processing, subscription management, and billing operations for BTD dating platform',
-      )
+      .setDescription('Comprehensive payment processing, subscription management, and billing operations for BTD dating platform')
       .setVersion('1.0')
       .addBearerAuth()
       .addTag('subscriptions', 'Subscription tier management')
@@ -71,13 +62,10 @@ async function bootstrap() {
       .addTag('health', 'Service health monitoring')
       .setContact('BTD Support', 'https://btd.com/support', 'support@btd.com')
       .setLicense('Proprietary', 'https://btd.com/license')
-      .addServer(
-        `http://localhost:${process.env.PORT ?? 3500}`,
-        'Local Development',
-      )
+      .addServer(`http://localhost:${process.env.PORT ?? 3500}`, 'Local Development')
       .addServer('https://api.btd.com', 'Production')
       .build();
-
+    
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('api/docs', app, document, {
       swaggerOptions: {
@@ -93,22 +81,31 @@ async function bootstrap() {
       customCss: '.swagger-ui .topbar { display: none }',
     });
 
-    console.log(
-      `📚 Swagger documentation available at: http://localhost:${process.env.PORT ?? 3500}/api/docs`,
-    );
+    console.log(`📚 Swagger documentation available at: http://localhost:${process.env.PORT ?? 3500}/api/docs`);
   }
 
   // Start all microservices
   await app.startAllMicroservices();
-
+  
   // Start HTTP server
-  await app.listen(process.env.PORT ?? 3500);
-  console.log(`💳 Payment service running on port ${process.env.PORT ?? 3500}`);
+  const port = process.env.PORT ?? 3500;
+  await app.listen(port);
+  console.log(`💳 Payment service running on port ${port}`);
   console.log(`🔗 gRPC server listening on port ${grpcPort}`);
-}
 
-// Start the application with proper error handling
-void bootstrap().catch((error) => {
-  console.error('Failed to start payment service:', error);
-  process.exit(1);
-});
+  // Register with Consul for service discovery
+  const consulRegistrar = new ConsulServiceRegistrar({
+    serviceName: 'btd-payment-service',
+    version: '1.0.0',
+    host: 'localhost',  // Will be auto-resolved to actual IP
+    port: parseInt(String(port)),
+    grpcPort: parseInt(String(grpcPort)),
+    protocol: 'http',
+    consulUrl: process.env.CONSUL_URL || 'http://localhost:8500',
+    healthCheckPath: '/api/v1/health',
+    tags: ['payment', 'subscription', 'billing'],
+  });
+
+  await consulRegistrar.register();
+}
+bootstrap();

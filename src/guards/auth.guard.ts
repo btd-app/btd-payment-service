@@ -1,7 +1,7 @@
 /**
  * Auth Guard
  * JWT authentication guard for protecting API endpoints
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
@@ -22,6 +22,13 @@ interface JwtPayload {
   exp?: number;
 }
 
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    email: string;
+  };
+}
+
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private readonly configService: ConfigService) {}
@@ -29,8 +36,8 @@ export class AuthGuard implements CanActivate {
   /**
    * Validate JWT token and attach user to request
    */
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractTokenFromHeader(request);
 
     if (!token) {
@@ -38,17 +45,18 @@ export class AuthGuard implements CanActivate {
     }
 
     try {
-      const secret = this.configService.get<string>('JWT_SECRET') || 'default-secret';
+      const secret =
+        this.configService.get<string>('JWT_SECRET') || 'default-secret';
       const payload = jwt.verify(token, secret) as unknown as JwtPayload;
 
       // Attach user to request
-      (request as any).user = {
+      request.user = {
         id: payload.id,
         email: payload.email,
       };
 
       return true;
-    } catch (error) {
+    } catch (_error) {
       throw new UnauthorizedException('Invalid token');
     }
   }

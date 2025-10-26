@@ -1,7 +1,7 @@
 /**
  * Redis Service
  * Handles event publishing to Redis for inter-service communication
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
@@ -11,7 +11,7 @@ import { Redis } from 'ioredis';
 export interface PaymentEvent {
   type: string;
   userId: string;
-  data: any;
+  data: Record<string, unknown>;
   timestamp: Date;
   correlationId?: string;
 }
@@ -36,7 +36,9 @@ export class RedisService {
       await this.redis.publish(channel, message);
       this.logger.debug(`Published event to ${channel}: ${event.type}`);
     } catch (error) {
-      this.logger.error(`Failed to publish event: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to publish event: ${errorMessage}`);
       throw error;
     }
   }
@@ -44,7 +46,10 @@ export class RedisService {
   /**
    * Publish subscription created event
    */
-  async publishSubscriptionCreated(userId: string, subscriptionData: any): Promise<void> {
+  async publishSubscriptionCreated(
+    userId: string,
+    subscriptionData: Record<string, unknown>,
+  ): Promise<void> {
     await this.publishPaymentEvent({
       type: 'subscription.created',
       userId,
@@ -56,7 +61,10 @@ export class RedisService {
   /**
    * Publish subscription updated event
    */
-  async publishSubscriptionUpdated(userId: string, subscriptionData: any): Promise<void> {
+  async publishSubscriptionUpdated(
+    userId: string,
+    subscriptionData: Record<string, unknown>,
+  ): Promise<void> {
     await this.publishPaymentEvent({
       type: 'subscription.updated',
       userId,
@@ -68,7 +76,10 @@ export class RedisService {
   /**
    * Publish subscription cancelled event
    */
-  async publishSubscriptionCancelled(userId: string, subscriptionData: any): Promise<void> {
+  async publishSubscriptionCancelled(
+    userId: string,
+    subscriptionData: Record<string, unknown>,
+  ): Promise<void> {
     await this.publishPaymentEvent({
       type: 'subscription.cancelled',
       userId,
@@ -80,7 +91,10 @@ export class RedisService {
   /**
    * Publish payment succeeded event
    */
-  async publishPaymentSucceeded(userId: string, paymentData: any): Promise<void> {
+  async publishPaymentSucceeded(
+    userId: string,
+    paymentData: Record<string, unknown>,
+  ): Promise<void> {
     await this.publishPaymentEvent({
       type: 'payment.succeeded',
       userId,
@@ -92,7 +106,10 @@ export class RedisService {
   /**
    * Publish payment failed event
    */
-  async publishPaymentFailed(userId: string, paymentData: any): Promise<void> {
+  async publishPaymentFailed(
+    userId: string,
+    paymentData: Record<string, unknown>,
+  ): Promise<void> {
     await this.publishPaymentEvent({
       type: 'payment.failed',
       userId,
@@ -104,7 +121,11 @@ export class RedisService {
   /**
    * Publish feature access granted event
    */
-  async publishFeatureAccessGranted(userId: string, feature: string, tier: string): Promise<void> {
+  async publishFeatureAccessGranted(
+    userId: string,
+    feature: string,
+    tier: string,
+  ): Promise<void> {
     await this.publishPaymentEvent({
       type: 'feature.access_granted',
       userId,
@@ -116,7 +137,11 @@ export class RedisService {
   /**
    * Publish feature access revoked event
    */
-  async publishFeatureAccessRevoked(userId: string, feature: string, reason: string): Promise<void> {
+  async publishFeatureAccessRevoked(
+    userId: string,
+    feature: string,
+    reason: string,
+  ): Promise<void> {
     await this.publishPaymentEvent({
       type: 'feature.access_revoked',
       userId,
@@ -128,7 +153,10 @@ export class RedisService {
   /**
    * Publish trial ending event
    */
-  async publishTrialEnding(userId: string, daysRemaining: number): Promise<void> {
+  async publishTrialEnding(
+    userId: string,
+    daysRemaining: number,
+  ): Promise<void> {
     await this.publishPaymentEvent({
       type: 'trial.ending',
       userId,
@@ -140,13 +168,17 @@ export class RedisService {
   /**
    * Get cached subscription data
    */
-  async getCachedSubscription(userId: string): Promise<any> {
+  async getCachedSubscription(
+    userId: string,
+  ): Promise<Record<string, unknown> | null> {
     try {
       const key = `subscription:${userId}`;
-      const data = await this.redis.get(key);
-      return data ? JSON.parse(data) : null;
+      const data: string | null = await this.redis.get(key);
+      return data ? (JSON.parse(data) as Record<string, unknown>) : null;
     } catch (error) {
-      this.logger.error(`Failed to get cached subscription: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get cached subscription: ${errorMessage}`);
       return null;
     }
   }
@@ -154,12 +186,18 @@ export class RedisService {
   /**
    * Cache subscription data
    */
-  async cacheSubscription(userId: string, subscriptionData: any, ttl = 3600): Promise<void> {
+  async cacheSubscription(
+    userId: string,
+    subscriptionData: Record<string, unknown>,
+    ttl = 3600,
+  ): Promise<void> {
     try {
       const key = `subscription:${userId}`;
       await this.redis.setex(key, ttl, JSON.stringify(subscriptionData));
     } catch (error) {
-      this.logger.error(`Failed to cache subscription: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to cache subscription: ${errorMessage}`);
     }
   }
 
@@ -171,7 +209,11 @@ export class RedisService {
       const key = `subscription:${userId}`;
       await this.redis.del(key);
     } catch (error) {
-      this.logger.error(`Failed to invalidate subscription cache: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to invalidate subscription cache: ${errorMessage}`,
+      );
     }
   }
 }

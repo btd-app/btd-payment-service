@@ -1,7 +1,7 @@
 /**
  * Subscription Service
  * Handles subscription feature validation, tier management, and usage tracking
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
@@ -24,7 +24,7 @@ export interface SubscriptionFeatures {
   hasGroupCalls: boolean;
   maxGroupParticipants: number;
   hasCallScheduling: boolean;
-  
+
   // Messaging Features
   dailyUnmatchedMessages: number;
   unlimitedUnmatchedMessages: boolean;
@@ -32,7 +32,7 @@ export interface SubscriptionFeatures {
   videoMessages: boolean;
   messageReactions: boolean;
   readReceipts: boolean;
-  
+
   // Discovery Features
   dailyLikes: number;
   unlimitedLikes: boolean;
@@ -40,22 +40,22 @@ export interface SubscriptionFeatures {
   advancedFilters: boolean;
   travelMode: boolean;
   incognitoMode: boolean;
-  
+
   // Profile Features
   maxPhotos: number;
   videoIntro: boolean;
   profileBoostCount: number;
   profileAnalytics: boolean;
-  
+
   // Communication Features
   groupAudioRooms: boolean;
-  
+
   // Community Features
   forumAccess: 'none' | 'read' | 'write' | 'vip';
   virtualEvents: boolean;
   aiCoaching: boolean;
   communityMatchmaking: boolean;
-  
+
   // Priority Features
   searchPriority: 'normal' | 'high' | 'ultra';
   messagePriority: 'normal' | 'high' | 'vip';
@@ -78,14 +78,16 @@ export class SubscriptionService {
       });
 
       // Return subscription or default to DISCOVER tier (free tier)
-      return subscription || {
-        userId,
-        subscriptionTier: SubscriptionTier.DISCOVER,
-        status: SubscriptionStatus.ACTIVE,
-        currentPeriodStart: new Date(),
-        currentPeriodEnd: new Date(),
-        cancelAtPeriodEnd: false,
-      };
+      return (
+        subscription || {
+          userId,
+          subscriptionTier: SubscriptionTier.DISCOVER,
+          status: SubscriptionStatus.ACTIVE,
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(),
+          cancelAtPeriodEnd: false,
+        }
+      );
     } catch (error) {
       this.logger.error('Error getting user subscription:', error);
       throw error;
@@ -112,7 +114,7 @@ export class SubscriptionService {
           hasGroupCalls: false,
           maxGroupParticipants: 0,
           hasCallScheduling: false,
-          
+
           // Messaging Features - Basic
           dailyUnmatchedMessages: 5,
           unlimitedUnmatchedMessages: false,
@@ -120,7 +122,7 @@ export class SubscriptionService {
           videoMessages: false,
           messageReactions: false,
           readReceipts: false,
-          
+
           // Discovery Features - Basic
           dailyLikes: 10,
           unlimitedLikes: false,
@@ -128,22 +130,22 @@ export class SubscriptionService {
           advancedFilters: false,
           travelMode: false,
           incognitoMode: false,
-          
+
           // Profile Features - Basic
           maxPhotos: 3,
           videoIntro: false,
           profileBoostCount: 0,
           profileAnalytics: false,
-          
+
           // Communication Features
           groupAudioRooms: false,
-          
+
           // Community Features
           forumAccess: 'read',
           virtualEvents: false,
           aiCoaching: false,
           communityMatchmaking: false,
-          
+
           // Priority Features
           searchPriority: 'normal',
           messagePriority: 'normal',
@@ -165,7 +167,7 @@ export class SubscriptionService {
           hasGroupCalls: false,
           maxGroupParticipants: 0,
           hasCallScheduling: false,
-          
+
           // Messaging Features - Enhanced
           dailyUnmatchedMessages: 25,
           unlimitedUnmatchedMessages: false,
@@ -173,7 +175,7 @@ export class SubscriptionService {
           videoMessages: false,
           messageReactions: true,
           readReceipts: true,
-          
+
           // Discovery Features - Enhanced
           dailyLikes: 50,
           unlimitedLikes: false,
@@ -181,22 +183,22 @@ export class SubscriptionService {
           advancedFilters: true,
           travelMode: true,
           incognitoMode: false,
-          
+
           // Profile Features - Enhanced
           maxPhotos: 6,
           videoIntro: false,
           profileBoostCount: 3,
           profileAnalytics: true,
-          
+
           // Communication Features
           groupAudioRooms: true,
-          
+
           // Community Features
           forumAccess: 'write',
           virtualEvents: true,
           aiCoaching: false,
           communityMatchmaking: true,
-          
+
           // Priority Features
           searchPriority: 'high',
           messagePriority: 'high',
@@ -218,7 +220,7 @@ export class SubscriptionService {
           hasGroupCalls: true,
           maxGroupParticipants: 8,
           hasCallScheduling: true,
-          
+
           // Messaging Features - Premium
           dailyUnmatchedMessages: -1, // Unlimited
           unlimitedUnmatchedMessages: true,
@@ -226,7 +228,7 @@ export class SubscriptionService {
           videoMessages: true,
           messageReactions: true,
           readReceipts: true,
-          
+
           // Discovery Features - Premium
           dailyLikes: -1, // Unlimited
           unlimitedLikes: true,
@@ -234,22 +236,22 @@ export class SubscriptionService {
           advancedFilters: true,
           travelMode: true,
           incognitoMode: true,
-          
+
           // Profile Features - Premium
           maxPhotos: 10,
           videoIntro: true,
           profileBoostCount: 10,
           profileAnalytics: true,
-          
+
           // Communication Features
           groupAudioRooms: true,
-          
+
           // Community Features
           forumAccess: 'vip',
           virtualEvents: true,
           aiCoaching: true,
           communityMatchmaking: true,
-          
+
           // Priority Features
           searchPriority: 'ultra',
           messagePriority: 'vip',
@@ -265,8 +267,8 @@ export class SubscriptionService {
    * Validate video call access for user
    */
   async validateVideoCallAccess(
-    userId: string, 
-    callType: 'audio' | 'video' | 'screen_share'
+    userId: string,
+    callType: 'audio' | 'video' | 'screen_share',
   ): Promise<{
     allowed: boolean;
     reason?: string;
@@ -274,7 +276,9 @@ export class SubscriptionService {
   }> {
     try {
       const subscription = await this.getUserSubscription(userId);
-      const features = this.getSubscriptionFeatures(subscription.subscriptionTier);
+      const features = this.getSubscriptionFeatures(
+        subscription.subscriptionTier,
+      );
 
       if (callType === 'video' && !features.canMakeVideoCalls) {
         return {
@@ -314,8 +318,8 @@ export class SubscriptionService {
    * Validate call duration against subscription limits
    */
   async validateCallDuration(
-    userId: string, 
-    currentDurationMinutes: number
+    userId: string,
+    currentDurationMinutes: number,
   ): Promise<{
     allowed: boolean;
     reason?: string;
@@ -323,7 +327,9 @@ export class SubscriptionService {
   }> {
     try {
       const subscription = await this.getUserSubscription(userId);
-      const features = this.getSubscriptionFeatures(subscription.subscriptionTier);
+      const features = this.getSubscriptionFeatures(
+        subscription.subscriptionTier,
+      );
 
       if (features.maxCallDuration === 0) {
         return {
@@ -356,15 +362,17 @@ export class SubscriptionService {
    * Validate feature access
    */
   async validateFeatureAccess(
-    userId: string, 
-    feature: keyof SubscriptionFeatures
+    userId: string,
+    feature: keyof SubscriptionFeatures,
   ): Promise<{
     allowed: boolean;
     reason?: string;
   }> {
     try {
       const subscription = await this.getUserSubscription(userId);
-      const features = this.getSubscriptionFeatures(subscription.subscriptionTier);
+      const features = this.getSubscriptionFeatures(
+        subscription.subscriptionTier,
+      );
       const hasAccess = features[feature];
 
       if (typeof hasAccess === 'boolean' && !hasAccess) {
@@ -406,8 +414,10 @@ export class SubscriptionService {
   /**
    * Get user's call usage stats for current month
    * NOTE: This functionality belongs in video-call service
+   * This is a stub method that returns mock data
+   * @returns Call usage statistics (mock data)
    */
-  async getMonthlyCallUsage(userId: string) {
+  getMonthlyCallUsage(..._args: unknown[]) {
     try {
       // This functionality should be in video-call service
       // Returning mock data to fix build errors
@@ -431,12 +441,9 @@ export class SubscriptionService {
   /**
    * Update call usage stats
    * NOTE: This functionality belongs in video-call service
+   * This is a stub method that does nothing
    */
-  async updateCallUsage(
-    userId: string,
-    callType: 'audio' | 'video',
-    durationMinutes: number
-  ): Promise<void> {
+  updateCallUsage(..._args: unknown[]): void {
     // This functionality should be in video-call service
     // No-op to fix build errors
     this.logger.debug(`Call usage tracking should be in video-call service`);
@@ -448,7 +455,9 @@ export class SubscriptionService {
   async canScheduleCalls(userId: string): Promise<boolean> {
     try {
       const subscription = await this.getUserSubscription(userId);
-      const features = this.getSubscriptionFeatures(subscription.subscriptionTier);
+      const features = this.getSubscriptionFeatures(
+        subscription.subscriptionTier,
+      );
       return features.hasCallScheduling;
     } catch (error) {
       this.logger.error('Error checking call scheduling access:', error);
@@ -462,7 +471,9 @@ export class SubscriptionService {
   async getMaxVideoQuality(userId: string): Promise<'sd' | 'hd' | 'fhd'> {
     try {
       const subscription = await this.getUserSubscription(userId);
-      const features = this.getSubscriptionFeatures(subscription.subscriptionTier);
+      const features = this.getSubscriptionFeatures(
+        subscription.subscriptionTier,
+      );
       return features.maxVideoQuality;
     } catch (error) {
       this.logger.error('Error getting max video quality:', error);
@@ -472,27 +483,31 @@ export class SubscriptionService {
 
   /**
    * Track feature usage for analytics
+   * @param userId - User ID
+   * @param feature - Feature name being tracked
+   * @param metadata - Optional metadata for the feature usage
    */
   async trackFeatureUsage(
-    userId: string, 
-    feature: string, 
-    metadata?: any
+    userId: string,
+    feature: string,
+    metadata?: Record<string, unknown>,
   ): Promise<void> {
     try {
       await this.prisma.featureUsage.create({
         data: {
           userId,
           feature,
-          metadata,
+          metadata: metadata as never,
         },
       });
 
-      this.logger.log('Feature usage tracked', {
+      const logData: Record<string, unknown> = {
         userId,
         feature,
         metadata,
         timestamp: new Date().toISOString(),
-      });
+      };
+      this.logger.log('Feature usage tracked', logData);
     } catch (error) {
       this.logger.error('Error tracking feature usage:', error);
     }
@@ -513,7 +528,10 @@ export class SubscriptionService {
   /**
    * Check if user has tier access (current tier >= required tier)
    */
-  async hasTierAccess(userId: string, requiredTier: SubscriptionTier): Promise<boolean> {
+  async hasTierAccess(
+    userId: string,
+    requiredTier: SubscriptionTier,
+  ): Promise<boolean> {
     try {
       const subscription = await this.getUserSubscription(userId);
       const currentLevel = this.getTierLevel(subscription.subscriptionTier);
@@ -527,12 +545,11 @@ export class SubscriptionService {
 
   /**
    * Get call usage statistics for a user
+   * NOTE: This functionality belongs in video-call service
+   * This is a stub method that returns mock data
+   * @returns Call usage statistics (mock data)
    */
-  async getCallUsageStats(userId: string) {
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const year = now.getFullYear();
-
+  getCallUsageStats(..._args: unknown[]) {
     // This functionality should be in video-call service
     // Returning mock data to fix build errors
     return {

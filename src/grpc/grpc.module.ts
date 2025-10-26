@@ -4,7 +4,6 @@
  */
 import { Module, Global } from '@nestjs/common';
 import { PaymentGrpcController } from './payment-grpc.controller';
-import { HealthController } from './health.controller';
 import { SubscriptionService } from '../services/subscription.service';
 import { StripeService } from '../services/stripe.service';
 import { PrismaModule } from '../prisma/prisma.module';

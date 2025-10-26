@@ -4,7 +4,6 @@
  */
 import { Controller, Logger } from '@nestjs/common';
 import { GrpcMethod, GrpcStreamMethod } from '@nestjs/microservices';
-import { Metadata, ServerUnaryCall } from '@grpc/grpc-js';
 import { Observable, Subject } from 'rxjs';
 
 // Import existing payment services
@@ -24,6 +23,61 @@ interface CreateSubscriptionRequest {
   userName?: string;
 }
 
+interface CreateSubscriptionResponse {
+  subscription: Subscription;
+  clientSecret?: string;
+  requiresAction: boolean;
+}
+
+interface UpdateSubscriptionRequest {
+  subscriptionId: string;
+  userId: string;
+  newPlanId: string;
+  prorate?: boolean;
+  effectiveDate?: string;
+  cancelAtPeriodEnd?: boolean;
+}
+
+interface UpdateSubscriptionResponse {
+  subscription: Subscription;
+  prorationAmount: number;
+}
+
+interface CancelSubscriptionRequest {
+  subscriptionId: string;
+  userId: string;
+  cancelImmediately: boolean;
+  cancellationReason?: string;
+  feedback?: string;
+}
+
+interface CancelSubscriptionResponse {
+  success: boolean;
+  cancelledAt: string;
+  endsAt: string;
+}
+
+interface GetSubscriptionRequest {
+  subscriptionId: string;
+  userId: string;
+}
+
+interface GetSubscriptionResponse {
+  subscription: Subscription;
+}
+
+interface GetUserSubscriptionsRequest {
+  userId: string;
+  includeCancelled?: boolean;
+  limit?: number;
+  startingAfter?: string;
+}
+
+interface GetUserSubscriptionsResponse {
+  subscriptions: Subscription[];
+  hasMore: boolean;
+}
+
 interface Subscription {
   id: string;
   userId: string;
@@ -39,6 +93,8 @@ interface Subscription {
   endsAt?: string;
   metadata?: Record<string, string>;
   featureFlags?: string[];
+  tier?: string;
+  cancelAtPeriodEnd?: boolean;
 }
 
 interface ProcessPaymentRequest {
@@ -49,6 +105,13 @@ interface ProcessPaymentRequest {
   description?: string;
   metadata?: Record<string, string>;
   savePaymentMethod?: boolean;
+}
+
+interface ProcessPaymentResponse {
+  payment: Payment | null;
+  clientSecret: string | null;
+  requiresAction: boolean;
+  error: string | null;
 }
 
 interface Payment {
@@ -65,6 +128,88 @@ interface Payment {
   subscriptionId?: string;
 }
 
+interface GetPaymentHistoryRequest {
+  userId: string;
+  limit?: number;
+  offset?: number;
+  startingAfter?: string;
+  endingBefore?: string;
+}
+
+interface GetPaymentHistoryResponse {
+  payments: Payment[];
+  hasMore: boolean;
+}
+
+interface RefundPaymentRequest {
+  paymentId: string;
+  userId: string;
+  amount?: number;
+  reason?: string;
+}
+
+interface RefundPaymentResponse {
+  refund: Refund | null;
+  success: boolean;
+  error?: string;
+}
+
+interface Refund {
+  id: string;
+  paymentId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  reason?: string;
+  createdAt: string;
+}
+
+interface AddPaymentMethodRequest {
+  userId: string;
+  paymentMethodId?: string;
+  setAsDefault?: boolean;
+}
+
+interface AddPaymentMethodResponse {
+  paymentMethod: PaymentMethod | null;
+  success: boolean;
+  error: string | null;
+  setupIntent?: {
+    clientSecret: string;
+    setupIntentId: string;
+  };
+}
+
+interface RemovePaymentMethodRequest {
+  paymentMethodId: string;
+  userId: string;
+}
+
+interface RemovePaymentMethodResponse {
+  success: boolean;
+  message: string;
+}
+
+interface GetPaymentMethodsRequest {
+  userId: string;
+  type?: string;
+}
+
+interface GetPaymentMethodsResponse {
+  paymentMethods: PaymentMethod[];
+  defaultPaymentMethodId: string | null;
+}
+
+interface SetDefaultPaymentMethodRequest {
+  userId: string;
+  paymentMethodId: string;
+}
+
+interface SetDefaultPaymentMethodResponse {
+  success: boolean;
+  paymentMethod: PaymentMethod | null;
+}
+
 interface PaymentMethod {
   id: string;
   type: string;
@@ -78,6 +223,62 @@ interface PaymentMethod {
   createdAt: string;
   isDefault: boolean;
   billingEmail?: string;
+  brand?: string;
+  last4?: string;
+}
+
+interface GetInvoicesRequest {
+  userId: string;
+  limit?: number;
+  startingAfter?: string;
+}
+
+interface GetInvoicesResponse {
+  invoices: Invoice[];
+  hasMore: boolean;
+}
+
+interface Invoice {
+  id: string;
+  subscriptionId: string | null;
+  amountDue: number;
+  amountPaid: number;
+  currency: string;
+  status: string;
+  dueDate: string;
+  periodStart: string;
+  periodEnd: string;
+  lineItems: InvoiceLineItem[];
+  pdfUrl: string | null;
+}
+
+interface InvoiceLineItem {
+  description: string;
+  amount: number;
+  quantity: number;
+  periodStart?: string;
+  periodEnd?: string;
+}
+
+interface GetUpcomingInvoiceRequest {
+  userId: string;
+  subscriptionId?: string;
+}
+
+interface GetUpcomingInvoiceResponse {
+  invoice: Invoice | null;
+  exists: boolean;
+}
+
+interface GetPricingPlansRequest {
+  currency?: string;
+  includeTrialInfo?: boolean;
+  userTier?: string;
+}
+
+interface GetPricingPlansResponse {
+  plans: PricingPlan[];
+  currency: string;
 }
 
 interface PricingPlan {
@@ -93,6 +294,73 @@ interface PricingPlan {
   trialDays: number;
   stripeMonthlyPriceId: string;
   stripeYearlyPriceId: string;
+}
+
+interface ValidatePromoCodeRequest {
+  promoCode: string;
+  userId?: string;
+  planId?: string;
+}
+
+interface ValidatePromoCodeResponse {
+  valid: boolean;
+  discountType?: string;
+  discountValue?: number;
+  discountAmount?: number;
+  discountPercentage?: number;
+  description?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
+interface ProcessStripeWebhookRequest {
+  eventType: string;
+  eventId: string;
+  payload?: Uint8Array;
+  signature?: string;
+  objectId?: string;
+  userId?: string;
+}
+
+interface ProcessStripeWebhookResponse {
+  processed: boolean;
+  message: string | null;
+  error: string | null;
+}
+
+interface GetPaymentHealthRequest {
+  includeStripeStatus?: boolean;
+  includeMetrics?: boolean;
+}
+
+interface GetPaymentHealthResponse {
+  healthy: boolean;
+  timestamp: string;
+  stripeStatus?: StripeStatus;
+  metrics?: PaymentMetrics;
+}
+
+interface StripeStatus {
+  connected: boolean;
+  mode: string;
+  webhookEndpointsActive: number;
+  lastWebhookAt: string;
+}
+
+interface PaymentMetrics {
+  totalTransactions: number;
+  successfulTransactions: number;
+  failedTransactions: number;
+  totalRevenue: number;
+  activeSubscriptions: number;
+  mrr: number;
+  transactionsByType: Record<string, number>;
+}
+
+interface StreamPaymentEventsRequest {
+  serviceId: string;
+  eventTypes?: string[];
+  userId?: string;
 }
 
 interface PaymentEvent {
@@ -125,10 +393,10 @@ export class PaymentGrpcController {
   @GrpcMethod('PaymentService', 'CreateSubscription')
   async createSubscription(
     data: CreateSubscriptionRequest,
-    metadata: Metadata,
-    call: ServerUnaryCall<any, any>,
-  ): Promise<any> {
-    this.logger.debug(`[gRPC] Creating subscription for user ${data.userId} with plan ${data.planId}`);
+  ): Promise<CreateSubscriptionResponse> {
+    this.logger.debug(
+      `[gRPC] Creating subscription for user ${data.userId} with plan ${data.planId}`,
+    );
 
     try {
       // Note: User data would come from external user service
@@ -163,7 +431,9 @@ export class PaymentGrpcController {
         amount: 0, // Would need to get from plan config
         currency: 'usd',
         interval: 'month',
-        currentPeriodStart: dbSubscription?.currentPeriodStart?.toISOString() || new Date().toISOString(),
+        currentPeriodStart:
+          dbSubscription?.currentPeriodStart?.toISOString() ||
+          new Date().toISOString(),
         currentPeriodEnd: result.currentPeriodEnd.toISOString(),
         createdAt: new Date().toISOString(),
         metadata: data.metadata,
@@ -182,7 +452,9 @@ export class PaymentGrpcController {
         requiresAction: !!result.clientSecret,
       };
     } catch (error) {
-      this.logger.error(`Failed to create subscription: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to create subscription: ${errorMessage}`);
       throw error;
     }
   }
@@ -191,15 +463,17 @@ export class PaymentGrpcController {
    * Update an existing subscription
    */
   @GrpcMethod('PaymentService', 'UpdateSubscription')
-  async updateSubscription(data: any, metadata: Metadata): Promise<any> {
+  async updateSubscription(
+    data: UpdateSubscriptionRequest,
+  ): Promise<UpdateSubscriptionResponse> {
     this.logger.debug(`[gRPC] Updating subscription ${data.subscriptionId}`);
 
     try {
       // Update subscription using Stripe service
-      const updatedStripeSubscription = await this.stripeService.updateSubscription(
+      await this.stripeService.updateSubscription(
         data.userId,
         data.newPlanId,
-        data.cancelAtPeriodEnd,
+        data.cancelAtPeriodEnd ?? false,
       );
 
       // Get updated subscription from database
@@ -211,23 +485,31 @@ export class PaymentGrpcController {
         throw new Error('Subscription not found');
       }
 
+      const subscription: Subscription = {
+        id: dbSubscription.stripeSubscriptionId || data.subscriptionId,
+        userId: data.userId,
+        planId: dbSubscription.planId || data.newPlanId,
+        status: dbSubscription.status.toLowerCase(),
+        amount: 0, // Would need to calculate from plan
+        currency: 'usd',
+        interval: 'month',
+        currentPeriodStart:
+          dbSubscription.currentPeriodStart?.toISOString() ||
+          new Date().toISOString(),
+        currentPeriodEnd:
+          dbSubscription.currentPeriodEnd?.toISOString() ||
+          new Date().toISOString(),
+        createdAt: dbSubscription.createdAt.toISOString(),
+      };
+
       return {
-        subscription: {
-          id: dbSubscription.stripeSubscriptionId || data.subscriptionId,
-          userId: data.userId,
-          planId: dbSubscription.planId || data.newPlanId,
-          status: dbSubscription.status.toLowerCase(),
-          amount: 0, // Would need to calculate from plan
-          currency: 'usd',
-          interval: 'month',
-          currentPeriodStart: dbSubscription.currentPeriodStart?.toISOString() || new Date().toISOString(),
-          currentPeriodEnd: dbSubscription.currentPeriodEnd?.toISOString() || new Date().toISOString(),
-          createdAt: dbSubscription.createdAt.toISOString(),
-        },
+        subscription,
         prorationAmount: 0, // Would need to calculate from Stripe response
       };
     } catch (error) {
-      this.logger.error(`Failed to update subscription: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to update subscription: ${errorMessage}`);
       throw error;
     }
   }
@@ -236,12 +518,19 @@ export class PaymentGrpcController {
    * Cancel a subscription
    */
   @GrpcMethod('PaymentService', 'CancelSubscription')
-  async cancelSubscription(data: any, metadata: Metadata): Promise<any> {
-    this.logger.debug(`[gRPC] Cancelling subscription ${data.subscriptionId} for user ${data.userId}`);
+  async cancelSubscription(
+    data: CancelSubscriptionRequest,
+  ): Promise<CancelSubscriptionResponse> {
+    this.logger.debug(
+      `[gRPC] Cancelling subscription ${data.subscriptionId} for user ${data.userId}`,
+    );
 
     try {
       // Cancel subscription using Stripe service
-      await this.stripeService.cancelSubscription(data.userId, data.cancelImmediately);
+      await this.stripeService.cancelSubscription(
+        data.userId,
+        data.cancelImmediately,
+      );
 
       // Get updated subscription from database
       const dbSubscription = await this.prisma.subscription.findUnique({
@@ -249,9 +538,10 @@ export class PaymentGrpcController {
       });
 
       const now = new Date().toISOString();
-      const endsAt = data.cancelImmediately 
-        ? now 
-        : dbSubscription?.currentPeriodEnd?.toISOString() || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const endsAt = data.cancelImmediately
+        ? now
+        : dbSubscription?.currentPeriodEnd?.toISOString() ||
+          new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
       // Emit event
       this.emitPaymentEvent('subscription_cancelled', data.userId, {
@@ -265,7 +555,9 @@ export class PaymentGrpcController {
         endsAt,
       };
     } catch (error) {
-      this.logger.error(`Failed to cancel subscription: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to cancel subscription: ${errorMessage}`);
       throw error;
     }
   }
@@ -274,7 +566,9 @@ export class PaymentGrpcController {
    * Get subscription details
    */
   @GrpcMethod('PaymentService', 'GetSubscription')
-  async getSubscription(data: any, metadata: Metadata): Promise<any> {
+  async getSubscription(
+    data: GetSubscriptionRequest,
+  ): Promise<GetSubscriptionResponse> {
     this.logger.debug(`[gRPC] Getting subscription ${data.subscriptionId}`);
 
     try {
@@ -288,25 +582,35 @@ export class PaymentGrpcController {
       }
 
       // Get subscription features from subscription service
-      const features = this.subscriptionService.getSubscriptionFeatures(dbSubscription.subscriptionTier);
+      const features = this.subscriptionService.getSubscriptionFeatures(
+        dbSubscription.subscriptionTier,
+      );
 
-      return {
-        subscription: {
-          id: dbSubscription.stripeSubscriptionId || data.subscriptionId,
-          userId: data.userId,
-          planId: dbSubscription.planId || dbSubscription.subscriptionTier.toLowerCase(),
-          status: dbSubscription.status.toLowerCase(),
-          amount: this.getPlanAmount(dbSubscription.subscriptionTier),
-          currency: 'usd',
-          interval: 'month',
-          currentPeriodStart: dbSubscription.currentPeriodStart?.toISOString() || new Date().toISOString(),
-          currentPeriodEnd: dbSubscription.currentPeriodEnd?.toISOString() || new Date().toISOString(),
-          createdAt: dbSubscription.createdAt.toISOString(),
-          featureFlags: this.extractFeatureFlags(features),
-        },
+      const subscription: Subscription = {
+        id: dbSubscription.stripeSubscriptionId || data.subscriptionId,
+        userId: data.userId,
+        planId:
+          dbSubscription.planId ||
+          dbSubscription.subscriptionTier.toLowerCase(),
+        status: dbSubscription.status.toLowerCase(),
+        amount: this.getPlanAmount(dbSubscription.subscriptionTier),
+        currency: 'usd',
+        interval: 'month',
+        currentPeriodStart:
+          dbSubscription.currentPeriodStart?.toISOString() ||
+          new Date().toISOString(),
+        currentPeriodEnd:
+          dbSubscription.currentPeriodEnd?.toISOString() ||
+          new Date().toISOString(),
+        createdAt: dbSubscription.createdAt.toISOString(),
+        featureFlags: this.extractFeatureFlags(features),
       };
+
+      return { subscription };
     } catch (error) {
-      this.logger.error(`Failed to get subscription: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get subscription: ${errorMessage}`);
       throw error;
     }
   }
@@ -317,10 +621,10 @@ export class PaymentGrpcController {
   @GrpcMethod('PaymentService', 'ProcessPayment')
   async processPayment(
     data: ProcessPaymentRequest,
-    metadata: Metadata,
-    call: ServerUnaryCall<any, any>,
-  ): Promise<any> {
-    this.logger.debug(`[gRPC] Processing payment of ${data.amount} ${data.currency} for user ${data.userId}`);
+  ): Promise<ProcessPaymentResponse> {
+    this.logger.debug(
+      `[gRPC] Processing payment of ${data.amount} ${data.currency} for user ${data.userId}`,
+    );
 
     try {
       // Create payment intent using Stripe service
@@ -370,12 +674,14 @@ export class PaymentGrpcController {
         error: null,
       };
     } catch (error) {
-      this.logger.error(`Failed to process payment: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to process payment: ${errorMessage}`);
       return {
         payment: null,
         clientSecret: null,
         requiresAction: false,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }
@@ -384,18 +690,25 @@ export class PaymentGrpcController {
    * Add a payment method
    */
   @GrpcMethod('PaymentService', 'AddPaymentMethod')
-  async addPaymentMethod(data: any, metadata: Metadata): Promise<any> {
+  async addPaymentMethod(
+    data: AddPaymentMethodRequest,
+  ): Promise<AddPaymentMethodResponse> {
     this.logger.debug(`[gRPC] Adding payment method for user ${data.userId}`);
 
     try {
       // Create setup intent for adding payment method
-      const setupIntent = await this.stripeService.createSetupIntent(data.userId);
+      const setupIntent = await this.stripeService.createSetupIntent(
+        data.userId,
+      );
 
       // If payment method ID is provided, attach it
       if (data.paymentMethodId) {
         // Set as default if requested
         if (data.setAsDefault) {
-          await this.stripeService.setDefaultPaymentMethod(data.userId, data.paymentMethodId);
+          await this.stripeService.setDefaultPaymentMethod(
+            data.userId,
+            data.paymentMethodId,
+          );
         }
 
         // Get payment method details from database
@@ -407,13 +720,15 @@ export class PaymentGrpcController {
           const paymentMethod: PaymentMethod = {
             id: dbPaymentMethod.stripePaymentMethodId,
             type: dbPaymentMethod.type,
-            card: dbPaymentMethod.brand ? {
-              brand: dbPaymentMethod.brand,
-              last4: dbPaymentMethod.last4 || '****',
-              expMonth: dbPaymentMethod.expiryMonth || 12,
-              expYear: dbPaymentMethod.expiryYear || 2025,
-              funding: 'credit',
-            } : undefined,
+            card: dbPaymentMethod.brand
+              ? {
+                  brand: dbPaymentMethod.brand,
+                  last4: dbPaymentMethod.last4 || '****',
+                  expMonth: dbPaymentMethod.expiryMonth || 12,
+                  expYear: dbPaymentMethod.expiryYear || 2025,
+                  funding: 'credit',
+                }
+              : undefined,
             createdAt: dbPaymentMethod.createdAt.toISOString(),
             isDefault: dbPaymentMethod.isDefault,
           };
@@ -437,11 +752,13 @@ export class PaymentGrpcController {
         },
       };
     } catch (error) {
-      this.logger.error(`Failed to add payment method: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to add payment method: ${errorMessage}`);
       return {
         paymentMethod: null,
         success: false,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }
@@ -450,36 +767,44 @@ export class PaymentGrpcController {
    * Get payment methods for a user
    */
   @GrpcMethod('PaymentService', 'GetPaymentMethods')
-  async getPaymentMethods(data: any, metadata: Metadata): Promise<any> {
+  async getPaymentMethods(
+    data: GetPaymentMethodsRequest,
+  ): Promise<GetPaymentMethodsResponse> {
     this.logger.debug(`[gRPC] Getting payment methods for user ${data.userId}`);
 
     try {
       // Get payment methods from Stripe service
-      const dbPaymentMethods = await this.stripeService.getPaymentMethods(data.userId);
+      const dbPaymentMethods = await this.stripeService.getPaymentMethods(
+        data.userId,
+      );
 
       // Transform to gRPC format
-      const paymentMethods: PaymentMethod[] = dbPaymentMethods.map(pm => ({
+      const paymentMethods: PaymentMethod[] = dbPaymentMethods.map((pm) => ({
         id: pm.stripePaymentMethodId,
         type: pm.type,
-        card: pm.brand ? {
-          brand: pm.brand,
-          last4: pm.last4 || '****',
-          expMonth: pm.expiryMonth || 12,
-          expYear: pm.expiryYear || 2025,
-          funding: 'credit',
-        } : undefined,
+        card: pm.brand
+          ? {
+              brand: pm.brand,
+              last4: pm.last4 || '****',
+              expMonth: pm.expiryMonth || 12,
+              expYear: pm.expiryYear || 2025,
+              funding: 'credit',
+            }
+          : undefined,
         createdAt: pm.createdAt.toISOString(),
         isDefault: pm.isDefault,
       }));
 
-      const defaultMethod = paymentMethods.find(pm => pm.isDefault);
+      const defaultMethod = paymentMethods.find((pm) => pm.isDefault);
 
       return {
         paymentMethods,
         defaultPaymentMethodId: defaultMethod?.id || null,
       };
     } catch (error) {
-      this.logger.error(`Failed to get payment methods: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get payment methods: ${errorMessage}`);
       throw error;
     }
   }
@@ -488,17 +813,21 @@ export class PaymentGrpcController {
    * Get pricing plans
    */
   @GrpcMethod('PaymentService', 'GetPricingPlans')
-  async getPricingPlans(data: any, metadata: Metadata): Promise<any> {
-    this.logger.debug(`[gRPC] Getting pricing plans for currency ${data.currency || 'usd'}`);
+  getPricingPlans(data: GetPricingPlansRequest): GetPricingPlansResponse {
+    this.logger.debug(
+      `[gRPC] Getting pricing plans for currency ${data.currency || 'usd'}`,
+    );
 
     try {
       // Get available plans from Stripe service
       const stripePlans = this.stripeService.getAvailablePlans();
 
       // Transform to gRPC format with feature details from subscription service
-      const plans: PricingPlan[] = Object.values(stripePlans).map(plan => {
-        const features = this.subscriptionService.getSubscriptionFeatures(plan.tier as SubscriptionTier);
-        
+      const plans: PricingPlan[] = Object.values(stripePlans).map((plan) => {
+        const features = this.subscriptionService.getSubscriptionFeatures(
+          plan.tier as SubscriptionTier,
+        );
+
         return {
           id: plan.id,
           name: plan.name,
@@ -526,7 +855,9 @@ export class PaymentGrpcController {
         currency: data.currency || 'usd',
       };
     } catch (error) {
-      this.logger.error(`Failed to get pricing plans: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get pricing plans: ${errorMessage}`);
       throw error;
     }
   }
@@ -535,40 +866,51 @@ export class PaymentGrpcController {
    * Get invoices for a user
    */
   @GrpcMethod('PaymentService', 'GetInvoices')
-  async getInvoices(data: any, metadata: Metadata): Promise<any> {
+  async getInvoices(data: GetInvoicesRequest): Promise<GetInvoicesResponse> {
     this.logger.debug(`[gRPC] Getting invoices for user ${data.userId}`);
 
     try {
       // Get billing history from Stripe service
-      const billingHistory = await this.stripeService.getBillingHistory(data.userId);
+      const billingHistory = await this.stripeService.getBillingHistory(
+        data.userId,
+      );
 
       // Transform to gRPC format
-      const invoices = billingHistory.map(bill => ({
-        id: bill.stripeInvoiceId,
-        subscriptionId: bill.subscriptionId || null,
-        amountDue: bill.amount / 100, // Convert from cents
-        amountPaid: bill.amount / 100,
-        currency: bill.currency,
-        status: bill.status.toLowerCase(),
-        dueDate: bill.createdAt.toISOString(),
-        periodStart: bill.periodStart.toISOString(),
-        periodEnd: bill.periodEnd.toISOString(),
-        lineItems: [
-          {
-            description: bill.description || 'Subscription',
-            amount: bill.amount / 100,
-            quantity: 1,
-          },
-        ],
-        pdfUrl: bill.pdfUrl || null,
-      }));
+      const invoices: Invoice[] = billingHistory.map((bill) => {
+        // Convert Prisma Decimal to number
+        const amountInCents = Number(bill.amount);
+        const amountInDollars = amountInCents / 100;
 
+        return {
+          id: bill.stripeInvoiceId,
+          subscriptionId: null, // Billing history doesn't have subscription ID
+          amountDue: amountInDollars,
+          amountPaid: amountInDollars,
+          currency: bill.currency,
+          status: bill.status.toLowerCase(),
+          dueDate: bill.createdAt.toISOString(),
+          periodStart: bill.periodStart.toISOString(),
+          periodEnd: bill.periodEnd.toISOString(),
+          lineItems: [
+            {
+              description: bill.description || 'Subscription',
+              amount: amountInDollars,
+              quantity: 1,
+            },
+          ],
+          pdfUrl: bill.pdfUrl || null,
+        };
+      });
+
+      const limit = data.limit || 100;
       return {
-        invoices: invoices.slice(0, data.limit || 100),
-        hasMore: invoices.length > (data.limit || 100),
+        invoices: invoices.slice(0, limit),
+        hasMore: invoices.length > limit,
       };
     } catch (error) {
-      this.logger.error(`Failed to get invoices: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get invoices: ${errorMessage}`);
       throw error;
     }
   }
@@ -577,7 +919,9 @@ export class PaymentGrpcController {
    * Process Stripe webhook
    */
   @GrpcMethod('PaymentService', 'ProcessStripeWebhook')
-  async processStripeWebhook(data: any, metadata: Metadata): Promise<any> {
+  async processStripeWebhook(
+    data: ProcessStripeWebhookRequest,
+  ): Promise<ProcessStripeWebhookResponse> {
     this.logger.debug(`[gRPC] Processing Stripe webhook: ${data.eventType}`);
 
     try {
@@ -588,27 +932,31 @@ export class PaymentGrpcController {
       switch (data.eventType) {
         case 'payment_intent.succeeded':
           // Update payment intent status in database
-          await this.prisma.paymentIntent.updateMany({
-            where: { stripePaymentIntentId: data.objectId },
-            data: { status: 'SUCCEEDED' },
-          });
-          this.emitPaymentEvent('webhook_payment_succeeded', data.userId, {
-            eventId: data.eventId,
-            paymentIntentId: data.objectId,
-          });
+          if (data.objectId) {
+            await this.prisma.paymentIntent.updateMany({
+              where: { stripePaymentIntentId: data.objectId },
+              data: { status: 'SUCCEEDED' },
+            });
+            this.emitPaymentEvent('webhook_payment_succeeded', data.userId, {
+              eventId: data.eventId,
+              paymentIntentId: data.objectId,
+            });
+          }
           processed = true;
           message = 'Payment intent succeeded';
           break;
 
         case 'payment_intent.payment_failed':
-          await this.prisma.paymentIntent.updateMany({
-            where: { stripePaymentIntentId: data.objectId },
-            data: { status: 'FAILED' },
-          });
-          this.emitPaymentEvent('webhook_payment_failed', data.userId, {
-            eventId: data.eventId,
-            paymentIntentId: data.objectId,
-          });
+          if (data.objectId) {
+            await this.prisma.paymentIntent.updateMany({
+              where: { stripePaymentIntentId: data.objectId },
+              data: { status: 'FAILED' },
+            });
+            this.emitPaymentEvent('webhook_payment_failed', data.userId, {
+              eventId: data.eventId,
+              paymentIntentId: data.objectId,
+            });
+          }
           processed = true;
           message = 'Payment intent failed';
           break;
@@ -632,11 +980,13 @@ export class PaymentGrpcController {
         error: null,
       };
     } catch (error) {
-      this.logger.error(`Failed to process webhook: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to process webhook: ${errorMessage}`);
       return {
         processed: false,
         message: null,
-        error: error.message,
+        error: errorMessage,
       };
     }
   }
@@ -645,10 +995,10 @@ export class PaymentGrpcController {
    * Get payment service health
    */
   @GrpcMethod('PaymentService', 'GetPaymentHealth')
-  async getPaymentHealth(data: any, metadata: Metadata): Promise<any> {
+  getPaymentHealth(data: GetPaymentHealthRequest): GetPaymentHealthResponse {
     this.logger.debug('[gRPC] Getting payment service health');
 
-    const response: any = {
+    const response: GetPaymentHealthResponse = {
       healthy: true,
       timestamp: new Date().toISOString(),
     };
@@ -667,9 +1017,9 @@ export class PaymentGrpcController {
         totalTransactions: 15234,
         successfulTransactions: 14998,
         failedTransactions: 236,
-        totalRevenue: 250000.50,
+        totalRevenue: 250000.5,
         activeSubscriptions: 1250,
-        mrr: 18750.00, // Monthly Recurring Revenue
+        mrr: 18750.0, // Monthly Recurring Revenue
         transactionsByType: {
           subscription_creation: 450,
           subscription_renewal: 800,
@@ -686,11 +1036,12 @@ export class PaymentGrpcController {
    */
   @GrpcStreamMethod('PaymentService', 'StreamPaymentEvents')
   streamPaymentEvents(
-    data: any,
-    metadata: Metadata,
+    data: StreamPaymentEventsRequest,
   ): Observable<PaymentEvent> {
-    this.logger.log(`[gRPC] Starting payment event stream for service ${data.serviceId}`);
-    
+    this.logger.log(
+      `[gRPC] Starting payment event stream for service ${data.serviceId}`,
+    );
+
     return new Observable((observer) => {
       const subscription = this.eventStream.subscribe({
         next: (event) => {
@@ -708,7 +1059,7 @@ export class PaymentGrpcController {
 
           observer.next(event);
         },
-        error: (err) => observer.error(err),
+        error: (err: Error) => observer.error(err),
         complete: () => observer.complete(),
       });
 
@@ -721,7 +1072,9 @@ export class PaymentGrpcController {
       // Cleanup on disconnect
       return () => {
         subscription.unsubscribe();
-        this.logger.log(`[gRPC] Payment event stream disconnected for service ${data.serviceId}`);
+        this.logger.log(
+          `[gRPC] Payment event stream disconnected for service ${data.serviceId}`,
+        );
       };
     });
   }
@@ -729,7 +1082,11 @@ export class PaymentGrpcController {
   /**
    * Helper method to emit payment events
    */
-  private emitPaymentEvent(eventType: string, userId?: string, data?: Record<string, string>) {
+  private emitPaymentEvent(
+    eventType: string,
+    userId?: string,
+    data?: Record<string, string>,
+  ) {
     const event: PaymentEvent = {
       eventId: `event-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       eventType,
@@ -747,33 +1104,49 @@ export class PaymentGrpcController {
    */
   private getFeatureFlagsForPlan(planId: string): string[] {
     const planFeatureMap: Record<string, string[]> = {
-      'discover': ['basic_matching'],
-      'connect': ['unlimited_likes', 'see_who_liked_you', 'advanced_filters', 'audio_calls'],
-      'community': ['unlimited_likes', 'see_who_liked_you', 'advanced_filters', 'audio_calls', 'video_calls', 'priority_support'],
+      discover: ['basic_matching'],
+      connect: [
+        'unlimited_likes',
+        'see_who_liked_you',
+        'advanced_filters',
+        'audio_calls',
+      ],
+      community: [
+        'unlimited_likes',
+        'see_who_liked_you',
+        'advanced_filters',
+        'audio_calls',
+        'video_calls',
+        'priority_support',
+      ],
     };
-    
+
     return planFeatureMap[planId] || planFeatureMap['discover'];
   }
 
   /**
    * Get plan amount by subscription tier
    */
-  private getPlanAmount(tier: any): number {
+  private getPlanAmount(tier: SubscriptionTier): number {
     const tierPricing: Record<string, number> = {
-      'DISCOVER': 0,
-      'CONNECT': 9.99,
-      'COMMUNITY': 19.99,
+      DISCOVER: 0,
+      CONNECT: 9.99,
+      COMMUNITY: 19.99,
     };
-    
+
     return tierPricing[tier] || 0;
   }
 
   /**
    * Extract feature flags from subscription features
    */
-  private extractFeatureFlags(features: any): string[] {
+  private extractFeatureFlags(
+    features: ReturnType<
+      typeof this.subscriptionService.getSubscriptionFeatures
+    >,
+  ): string[] {
     const flags: string[] = [];
-    
+
     if (features.unlimitedLikes) flags.push('unlimited_likes');
     if (features.seeWhoLikedYou) flags.push('see_who_liked_you');
     if (features.advancedFilters) flags.push('advanced_filters');
@@ -783,25 +1156,32 @@ export class PaymentGrpcController {
     if (features.videoMessages) flags.push('video_messages');
     if (features.travelMode) flags.push('travel_mode');
     if (features.incognitoMode) flags.push('incognito_mode');
-    if (features.supportPriority === 'priority' || features.supportPriority === 'vip') {
+    if (
+      features.supportPriority === 'priority' ||
+      features.supportPriority === 'vip'
+    ) {
       flags.push('priority_support');
     }
-    
+
     return flags;
   }
 
   /**
    * Get plan feature list for pricing display
    */
-  private getPlanFeatureList(features: any): string[] {
+  private getPlanFeatureList(
+    features: ReturnType<
+      typeof this.subscriptionService.getSubscriptionFeatures
+    >,
+  ): string[] {
     const featureList: string[] = [];
-    
+
     if (features.unlimitedLikes) {
       featureList.push('Unlimited likes');
     } else {
       featureList.push(`${features.dailyLikes} likes per day`);
     }
-    
+
     if (features.seeWhoLikedYou) featureList.push('See who liked you');
     if (features.canMakeAudioCalls) featureList.push('Audio calls');
     if (features.canMakeVideoCalls) featureList.push('Video calls');
@@ -810,59 +1190,87 @@ export class PaymentGrpcController {
     if (features.advancedFilters) featureList.push('Advanced filters');
     if (features.travelMode) featureList.push('Travel mode');
     if (features.incognitoMode) featureList.push('Incognito browsing');
-    
+
     if (features.supportPriority === 'priority') {
       featureList.push('Priority support');
     } else if (features.supportPriority === 'vip') {
       featureList.push('VIP support');
     }
-    
+
     return featureList;
   }
 
   // Additional stub methods for remaining RPCs
 
   @GrpcMethod('PaymentService', 'GetUserSubscriptions')
-  async getUserSubscriptions(data: any): Promise<any> {
+  async getUserSubscriptions(
+    data: GetUserSubscriptionsRequest,
+  ): Promise<GetUserSubscriptionsResponse> {
     this.logger.debug(`[gRPC] Getting subscriptions for user ${data.userId}`);
-    
+
     try {
       // Get user's current subscription
-      const subscription = await this.subscriptionService.getUserSubscription(data.userId);
-      const features = this.subscriptionService.getSubscriptionFeatures(subscription.subscriptionTier);
+      const subscription = await this.subscriptionService.getUserSubscription(
+        data.userId,
+      );
+      const features = this.subscriptionService.getSubscriptionFeatures(
+        subscription.subscriptionTier,
+      );
 
-      const subscriptions = [{
-        id: ('stripeSubscriptionId' in subscription ? subscription.stripeSubscriptionId : null) || `sub_${data.userId}`,
+      const subscriptionCreatedAt =
+        'createdAt' in subscription && subscription.createdAt instanceof Date
+          ? subscription.createdAt.toISOString()
+          : new Date().toISOString();
+
+      const grpcSubscription: Subscription = {
+        id:
+          ('stripeSubscriptionId' in subscription
+            ? subscription.stripeSubscriptionId
+            : null) || `sub_${data.userId}`,
         userId: data.userId,
-        planId: ('planId' in subscription ? subscription.planId : null) || subscription.subscriptionTier.toLowerCase(),
+        planId:
+          ('planId' in subscription ? subscription.planId : null) ||
+          subscription.subscriptionTier.toLowerCase(),
         status: subscription.status?.toLowerCase() || 'active',
         tier: subscription.subscriptionTier,
-        currentPeriodStart: subscription.currentPeriodStart?.toISOString() || new Date().toISOString(),
-        currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() || new Date().toISOString(),
+        amount: this.getPlanAmount(subscription.subscriptionTier),
+        currency: 'usd',
+        interval: 'month',
+        currentPeriodStart:
+          subscription.currentPeriodStart?.toISOString() ||
+          new Date().toISOString(),
+        currentPeriodEnd:
+          subscription.currentPeriodEnd?.toISOString() ||
+          new Date().toISOString(),
+        createdAt: subscriptionCreatedAt,
         cancelAtPeriodEnd: subscription.cancelAtPeriodEnd || false,
-        features: this.extractFeatureFlags(features),
-      }];
+        featureFlags: this.extractFeatureFlags(features),
+      };
 
-      return { 
-        subscriptions, 
-        hasMore: false 
+      return {
+        subscriptions: [grpcSubscription],
+        hasMore: false,
       };
     } catch (error) {
-      this.logger.error(`Failed to get user subscriptions: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get user subscriptions: ${errorMessage}`);
       return { subscriptions: [], hasMore: false };
     }
   }
 
   @GrpcMethod('PaymentService', 'RefundPayment')
-  async refundPayment(data: any): Promise<any> {
+  refundPayment(data: RefundPaymentRequest): RefundPaymentResponse {
     this.logger.debug(`[gRPC] Processing refund for payment ${data.paymentId}`);
     return { refund: null, success: false, error: 'Not implemented' };
   }
 
   @GrpcMethod('PaymentService', 'GetPaymentHistory')
-  async getPaymentHistory(data: any): Promise<any> {
+  async getPaymentHistory(
+    data: GetPaymentHistoryRequest,
+  ): Promise<GetPaymentHistoryResponse> {
     this.logger.debug(`[gRPC] Getting payment history for user ${data.userId}`);
-    
+
     try {
       // Get payment intents from database
       const paymentIntents = await this.prisma.paymentIntent.findMany({
@@ -872,114 +1280,163 @@ export class PaymentGrpcController {
         skip: data.offset || 0,
       });
 
-      const payments = paymentIntents.map(pi => ({
+      const payments: Payment[] = paymentIntents.map((pi) => ({
         id: pi.stripePaymentIntentId,
         userId: pi.userId,
-        amount: pi.amount,
+        amount: Number(pi.amount), // Convert Prisma Decimal to number
         currency: pi.currency,
         status: pi.status.toLowerCase(),
         description: pi.description,
+        paymentMethodId: '',
         createdAt: pi.createdAt.toISOString(),
-        metadata: pi.metadata || {},
+        metadata: (pi.metadata as Record<string, string>) || {},
       }));
 
-      return { 
-        payments, 
-        hasMore: paymentIntents.length === (data.limit || 50)
+      return {
+        payments,
+        hasMore: paymentIntents.length === (data.limit || 50),
       };
     } catch (error) {
-      this.logger.error(`Failed to get payment history: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to get payment history: ${errorMessage}`);
       return { payments: [], hasMore: false };
     }
   }
 
   @GrpcMethod('PaymentService', 'RemovePaymentMethod')
-  async removePaymentMethod(data: any): Promise<any> {
+  async removePaymentMethod(
+    data: RemovePaymentMethodRequest,
+  ): Promise<RemovePaymentMethodResponse> {
     this.logger.debug(`[gRPC] Removing payment method ${data.paymentMethodId}`);
-    
+
     try {
       // Remove payment method using Stripe service
-      await this.stripeService.deletePaymentMethod(data.userId, data.paymentMethodId);
-      
-      return { 
-        success: true, 
-        message: 'Payment method removed successfully' 
+      await this.stripeService.deletePaymentMethod(
+        data.userId,
+        data.paymentMethodId,
+      );
+
+      return {
+        success: true,
+        message: 'Payment method removed successfully',
       };
     } catch (error) {
-      this.logger.error(`Failed to remove payment method: ${error.message}`);
-      return { 
-        success: false, 
-        message: error.message 
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to remove payment method: ${errorMessage}`);
+      return {
+        success: false,
+        message: errorMessage,
       };
     }
   }
 
   @GrpcMethod('PaymentService', 'SetDefaultPaymentMethod')
-  async setDefaultPaymentMethod(data: any): Promise<any> {
-    this.logger.debug(`[gRPC] Setting default payment method for user ${data.userId}`);
-    
+  async setDefaultPaymentMethod(
+    data: SetDefaultPaymentMethodRequest,
+  ): Promise<SetDefaultPaymentMethodResponse> {
+    this.logger.debug(
+      `[gRPC] Setting default payment method for user ${data.userId}`,
+    );
+
     try {
       // Set default payment method using Stripe service
-      await this.stripeService.setDefaultPaymentMethod(data.userId, data.paymentMethodId);
-      
+      await this.stripeService.setDefaultPaymentMethod(
+        data.userId,
+        data.paymentMethodId,
+      );
+
       // Get updated payment method details
-      const paymentMethod = await this.prisma.paymentMethod.findUnique({
+      const dbPaymentMethod = await this.prisma.paymentMethod.findUnique({
         where: { stripePaymentMethodId: data.paymentMethodId },
       });
-      
-      return { 
-        success: true, 
-        paymentMethod: paymentMethod ? {
-          id: paymentMethod.stripePaymentMethodId,
-          type: paymentMethod.type,
-          isDefault: true,
-          last4: paymentMethod.last4,
-          brand: paymentMethod.brand,
-        } : null
+
+      const paymentMethod: PaymentMethod | null = dbPaymentMethod
+        ? {
+            id: dbPaymentMethod.stripePaymentMethodId,
+            type: dbPaymentMethod.type,
+            isDefault: true,
+            last4: dbPaymentMethod.last4,
+            brand: dbPaymentMethod.brand,
+            createdAt: dbPaymentMethod.createdAt.toISOString(),
+          }
+        : null;
+
+      return {
+        success: true,
+        paymentMethod,
       };
     } catch (error) {
-      this.logger.error(`Failed to set default payment method: ${error.message}`);
-      return { 
-        success: false, 
-        paymentMethod: null 
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to set default payment method: ${errorMessage}`,
+      );
+      return {
+        success: false,
+        paymentMethod: null,
       };
     }
   }
 
   @GrpcMethod('PaymentService', 'GetUpcomingInvoice')
-  async getUpcomingInvoice(data: any): Promise<any> {
-    this.logger.debug(`[gRPC] Getting upcoming invoice for user ${data.userId}`);
+  getUpcomingInvoice(
+    data: GetUpcomingInvoiceRequest,
+  ): GetUpcomingInvoiceResponse {
+    this.logger.debug(
+      `[gRPC] Getting upcoming invoice for user ${data.userId}`,
+    );
     return { invoice: null, exists: false };
   }
 
   @GrpcMethod('PaymentService', 'ValidatePromoCode')
-  async validatePromoCode(data: any): Promise<any> {
+  validatePromoCode(data: ValidatePromoCodeRequest): ValidatePromoCodeResponse {
     this.logger.debug(`[gRPC] Validating promo code ${data.promoCode}`);
-    
+
     try {
       // Promo code validation - simplified for now since tables don't exist
       // In production, this would check against a promo codes table
-      const validPromoCodes = {
-        'WELCOME10': { discountType: 'percentage', discountValue: 10, description: '10% off first month' },
-        'SAVE20': { discountType: 'percentage', discountValue: 20, description: '20% off first month' },
-        'FRIEND50': { discountType: 'fixed', discountValue: 50, description: '$5.00 off' },
+      interface PromoCodeDetails {
+        discountType: string;
+        discountValue: number;
+        description: string;
+      }
+
+      const validPromoCodes: Record<string, PromoCodeDetails> = {
+        WELCOME10: {
+          discountType: 'percentage',
+          discountValue: 10,
+          description: '10% off first month',
+        },
+        SAVE20: {
+          discountType: 'percentage',
+          discountValue: 20,
+          description: '20% off first month',
+        },
+        FRIEND50: {
+          discountType: 'fixed',
+          discountValue: 50,
+          description: '$5.00 off',
+        },
       };
-      
+
       const promoCode = validPromoCodes[data.promoCode.toUpperCase()];
-      
+
       if (!promoCode) {
         return { valid: false, error: 'Invalid promo code' };
       }
-      
+
       return {
         valid: true,
         discountType: promoCode.discountType,
         discountValue: promoCode.discountValue,
         description: promoCode.description,
-        error: null,
       };
     } catch (error) {
-      this.logger.error(`Failed to validate promo code: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Failed to validate promo code: ${errorMessage}`);
       return { valid: false, error: 'Failed to validate promo code' };
     }
   }

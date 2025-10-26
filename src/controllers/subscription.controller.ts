@@ -1,7 +1,7 @@
 /**
  * Subscription Controller
  * Handles subscription management API endpoints
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
@@ -13,7 +13,6 @@ import {
   Delete,
   Body,
   Param,
-  UseGuards,
   Req,
   HttpStatus,
   HttpCode,
@@ -26,7 +25,10 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { StripeService } from '../services/stripe.service';
-import { SubscriptionService, SubscriptionFeatures } from '../services/subscription.service';
+import {
+  SubscriptionService,
+  SubscriptionFeatures,
+} from '../services/subscription.service';
 import {
   CreateSubscriptionDto,
   UpdateSubscriptionDto,
@@ -68,7 +70,9 @@ export class SubscriptionController {
     type: UserSubscriptionDto,
   })
   @ApiResponse({ status: 404, description: 'No active subscription found' })
-  async getCurrentSubscription(@Req() req: AuthenticatedRequest): Promise<UserSubscriptionDto> {
+  async getCurrentSubscription(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<UserSubscriptionDto> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
     return this.stripeService.getCurrentSubscription(userId);
   }
@@ -85,17 +89,20 @@ export class SubscriptionController {
     type: SubscriptionResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Invalid request' })
-  @ApiResponse({ status: 409, description: 'Active subscription already exists' })
+  @ApiResponse({
+    status: 409,
+    description: 'Active subscription already exists',
+  })
   async createSubscription(
     @Body() dto: CreateSubscriptionDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<SubscriptionResponseDto> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
     const userEmail = req.user?.email || 'test@example.com';
-    
+
     // Ensure customer exists
-    const customerId = await this.stripeService.createOrGetCustomer(userId, userEmail);
-    
+    await this.stripeService.createOrGetCustomer(userId, userEmail);
+
     return this.stripeService.createSubscription(
       userId,
       dto.planId,
@@ -108,7 +115,10 @@ export class SubscriptionController {
    */
   @Put(':subscriptionId')
   @ApiOperation({ summary: 'Update subscription (upgrade/downgrade/cancel)' })
-  @ApiParam({ name: 'subscriptionId', description: 'Subscription ID to update' })
+  @ApiParam({
+    name: 'subscriptionId',
+    description: 'Subscription ID to update',
+  })
   @ApiResponse({
     status: 200,
     description: 'Subscription updated successfully',
@@ -121,33 +131,45 @@ export class SubscriptionController {
     @Req() req: AuthenticatedRequest,
   ): Promise<SubscriptionResponseDto> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
-    
+
     if (dto.cancelAtPeriodEnd !== undefined) {
       if (dto.cancelAtPeriodEnd) {
-        await this.stripeService.cancelSubscription(userId, dto.cancelAtPeriodEnd);
+        await this.stripeService.cancelSubscription(
+          userId,
+          dto.cancelAtPeriodEnd,
+        );
         // Return a response after cancelling
-        const subscription = await this.stripeService.getCurrentSubscription(userId);
+        const subscription =
+          await this.stripeService.getCurrentSubscription(userId);
         return {
           subscriptionId: subscription.stripeSubscriptionId || '',
           status: subscription.status,
           currentPeriodEnd: subscription.currentPeriodEnd,
         };
       } else {
-        return this.stripeService.reactivateSubscription(userId, subscriptionId);
+        return this.stripeService.reactivateSubscription(
+          userId,
+          subscriptionId,
+        );
       }
     }
-    
+
     if (dto.planId) {
-      await this.stripeService.updateSubscription(userId, dto.planId, dto.cancelAtPeriodEnd);
+      await this.stripeService.updateSubscription(
+        userId,
+        dto.planId,
+        dto.cancelAtPeriodEnd,
+      );
       // Return updated subscription
-      const subscription = await this.stripeService.getCurrentSubscription(userId);
+      const subscription =
+        await this.stripeService.getCurrentSubscription(userId);
       return {
         subscriptionId: subscription.stripeSubscriptionId || '',
         status: subscription.status,
         currentPeriodEnd: subscription.currentPeriodEnd,
       };
     }
-    
+
     throw new Error('No valid update parameters provided');
   }
 
@@ -157,7 +179,10 @@ export class SubscriptionController {
   @Delete(':subscriptionId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Cancel subscription immediately' })
-  @ApiParam({ name: 'subscriptionId', description: 'Subscription ID to cancel' })
+  @ApiParam({
+    name: 'subscriptionId',
+    description: 'Subscription ID to cancel',
+  })
   @ApiResponse({
     status: 204,
     description: 'Subscription cancelled successfully',
@@ -168,7 +193,10 @@ export class SubscriptionController {
     @Req() req: AuthenticatedRequest,
   ): Promise<void> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
-    await this.stripeService.cancelSubscriptionImmediately(userId, subscriptionId);
+    await this.stripeService.cancelSubscriptionImmediately(
+      userId,
+      subscriptionId,
+    );
   }
 
   /**
@@ -193,7 +221,7 @@ export class SubscriptionController {
   ): Promise<{ sessionId: string; url: string }> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
     const userEmail = req.user?.email || 'test@example.com';
-    
+
     return this.stripeService.createCheckoutSession(
       userId,
       userEmail,
@@ -208,7 +236,10 @@ export class SubscriptionController {
    */
   @Post('portal-session')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Create Stripe Portal session for self-service subscription management' })
+  @ApiOperation({
+    summary:
+      'Create Stripe Portal session for self-service subscription management',
+  })
   @ApiResponse({
     status: 200,
     description: 'Portal session created successfully',
@@ -236,10 +267,15 @@ export class SubscriptionController {
     description: 'Returns subscription features',
     type: SubscriptionFeaturesDto,
   })
-  async getSubscriptionFeatures(@Req() req: AuthenticatedRequest): Promise<SubscriptionFeaturesDto> {
+  async getSubscriptionFeatures(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<SubscriptionFeaturesDto> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
-    const subscription = await this.stripeService.getCurrentSubscription(userId);
-    return this.subscriptionService.getSubscriptionFeatures(subscription.subscriptionTier);
+    const subscription =
+      await this.stripeService.getCurrentSubscription(userId);
+    return this.subscriptionService.getSubscriptionFeatures(
+      subscription.subscriptionTier,
+    );
   }
 
   /**
@@ -247,7 +283,9 @@ export class SubscriptionController {
    */
   @Post('validate-feature')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Validate if user has access to a specific feature' })
+  @ApiOperation({
+    summary: 'Validate if user has access to a specific feature',
+  })
   @ApiResponse({
     status: 200,
     description: 'Feature access validation result',
@@ -258,7 +296,10 @@ export class SubscriptionController {
     @Req() req: AuthenticatedRequest,
   ): Promise<FeatureAccessResponseDto> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
-    return this.subscriptionService.validateFeatureAccess(userId, dto.feature as keyof SubscriptionFeatures);
+    return this.subscriptionService.validateFeatureAccess(
+      userId,
+      dto.feature as keyof SubscriptionFeatures,
+    );
   }
 
   /**
@@ -271,7 +312,7 @@ export class SubscriptionController {
     description: 'Returns call usage statistics',
     type: CallUsageStatsDto,
   })
-  async getCallUsageStats(@Req() req: AuthenticatedRequest): Promise<CallUsageStatsDto> {
+  getCallUsageStats(@Req() req: AuthenticatedRequest): CallUsageStatsDto {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
     return this.subscriptionService.getCallUsageStats(userId);
   }
@@ -287,11 +328,15 @@ export class SubscriptionController {
     description: 'Usage tracked successfully',
   })
   async trackFeatureUsage(
-    @Body() dto: { feature: string; metadata?: any },
+    @Body() dto: { feature: string; metadata?: Record<string, unknown> },
     @Req() req: AuthenticatedRequest,
   ): Promise<{ success: boolean }> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
-    await this.subscriptionService.trackFeatureUsage(userId, dto.feature, dto.metadata);
+    await this.subscriptionService.trackFeatureUsage(
+      userId,
+      dto.feature,
+      dto.metadata,
+    );
     return { success: true };
   }
 }

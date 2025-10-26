@@ -1,7 +1,7 @@
 /**
  * Stripe Configuration
  * Handles all Stripe-related configuration and plan definitions
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
@@ -25,7 +25,7 @@ export default registerAs('stripe', () => ({
   publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
   currency: 'usd',
   apiVersion: '2025-07-30.basil' as const,
-  
+
   // Webhook events we listen for
   webhookEvents: [
     'customer.subscription.created',
@@ -41,7 +41,7 @@ export default registerAs('stripe', () => ({
     'checkout.session.completed',
     'checkout.session.expired',
   ],
-  
+
   // Subscription plans configuration
   plans: {
     discover_monthly: {

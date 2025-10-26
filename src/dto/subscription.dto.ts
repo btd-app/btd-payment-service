@@ -1,11 +1,17 @@
 /**
  * Subscription DTOs
  * Data Transfer Objects for subscription-related operations
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
-import { IsString, IsNotEmpty, IsOptional, IsBoolean, IsEnum, IsUrl } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsBoolean,
+  IsUrl,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SubscriptionTier, SubscriptionStatus } from '@prisma/client';
 

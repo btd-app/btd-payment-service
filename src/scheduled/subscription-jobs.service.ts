@@ -23,8 +23,10 @@ export class SubscriptionJobsService {
       });
 
       this.logger.log(`Reset daily limits for ${result.count} users`);
-    } catch (error) {
-      this.logger.error(`Daily limits reset failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Daily limits reset failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
@@ -65,14 +67,20 @@ export class SubscriptionJobsService {
           },
         });
 
-        this.logger.log(`Expired subscription for user: ${subscription.userId}`);
+        this.logger.log(
+          `Expired subscription for user: ${subscription.userId}`,
+        );
       }
 
       if (expiredSubscriptions.length > 0) {
-        this.logger.log(`Processed ${expiredSubscriptions.length} expired subscriptions`);
+        this.logger.log(
+          `Processed ${expiredSubscriptions.length} expired subscriptions`,
+        );
       }
-    } catch (error) {
-      this.logger.error(`Expired subscriptions check failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Expired subscriptions check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
@@ -94,10 +102,14 @@ export class SubscriptionJobsService {
       // In production, this would trigger a re-attempt to charge the user
       // For now, just log them
       if (retrySubscriptions.length > 0) {
-        this.logger.log(`Found ${retrySubscriptions.length} subscriptions in billing retry`);
+        this.logger.log(
+          `Found ${retrySubscriptions.length} subscriptions in billing retry`,
+        );
       }
-    } catch (error) {
-      this.logger.error(`Billing retry check failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Billing retry check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
@@ -121,8 +133,10 @@ export class SubscriptionJobsService {
       if (result.count > 0) {
         this.logger.log(`Deleted ${result.count} old webhook logs`);
       }
-    } catch (error) {
-      this.logger.error(`Webhook log cleanup failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Webhook log cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
@@ -141,11 +155,15 @@ export class SubscriptionJobsService {
       });
 
       if (pendingTransactions.length > 0) {
-        this.logger.log(`Found ${pendingTransactions.length} pending transactions to process`);
+        this.logger.log(
+          `Found ${pendingTransactions.length} pending transactions to process`,
+        );
         // In production, this would verify these with Apple
       }
-    } catch (error) {
-      this.logger.error(`Pending transactions sync failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Pending transactions sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 }

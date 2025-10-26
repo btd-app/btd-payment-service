@@ -1,11 +1,11 @@
 /**
  * Payment DTOs
  * Data Transfer Objects for payment-related operations
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreatePaymentIntentDto {

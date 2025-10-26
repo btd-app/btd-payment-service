@@ -8,28 +8,29 @@ export class AppController {
   constructor(private readonly appService: AppService) {}
 
   @Get()
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Health check',
-    description: 'Basic health check endpoint to verify service is running'
+    description: 'Basic health check endpoint to verify service is running',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Service is healthy',
     schema: {
-      example: 'Payment Service is running!'
-    }
+      example: 'Payment Service is running!',
+    },
   })
   getHello(): string {
     return this.appService.getHello();
   }
 
   @Get('health')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Detailed health check',
-    description: 'Check service health including database and Stripe API connectivity'
+    description:
+      'Check service health including database and Stripe API connectivity',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Service and dependencies are healthy',
     schema: {
       example: {
@@ -37,14 +38,14 @@ export class AppController {
         timestamp: '2025-08-15T10:00:00Z',
         services: {
           database: true,
-          stripe: true
-        }
-      }
-    }
+          stripe: true,
+        },
+      },
+    },
   })
-  @ApiResponse({ 
-    status: 503, 
-    description: 'Service or dependencies are unhealthy'
+  @ApiResponse({
+    status: 503,
+    description: 'Service or dependencies are unhealthy',
   })
   getHealth() {
     return {
@@ -52,8 +53,8 @@ export class AppController {
       timestamp: new Date().toISOString(),
       services: {
         database: true,
-        stripe: true
-      }
+        stripe: true,
+      },
     };
   }
 }

@@ -18,22 +18,24 @@ export class CorrelationIdMiddleware implements NestMiddleware {
    */
   use(req: Request, res: Response, next: NextFunction) {
     // Extract or generate correlation ID
-    const correlationId = req.headers['x-correlation-id'] as string || uuidv4();
-    
+    const correlationId =
+      (req.headers['x-correlation-id'] as string) || uuidv4();
+
     // Extract calling service (which service is calling us)
-    const callingService = req.headers['x-calling-service'] as string || 'unknown';
-    
+    const callingService =
+      (req.headers['x-calling-service'] as string) || 'unknown';
+
     // Extract request ID if present
     const requestId = req.headers['x-request-id'] as string;
-    
+
     // Add to request object for easy access in controllers/services
-    (req as any).correlationId = correlationId;
-    (req as any).callingService = callingService;
-    (req as any).requestId = requestId;
-    
+    req.correlationId = correlationId;
+    req.callingService = callingService;
+    req.requestId = requestId;
+
     // Set correlation ID in response headers for client tracking
     res.setHeader('X-Correlation-ID', correlationId);
-    
+
     // Log the request with correlation details
     this.logger.log({
       message: `[${correlationId}] ${req.method} ${req.originalUrl}`,
@@ -46,7 +48,7 @@ export class CorrelationIdMiddleware implements NestMiddleware {
       userAgent: req.headers['user-agent'],
       service: 'btd-payment-service',
     });
-    
+
     // Continue to next middleware
     next();
   }

@@ -1,12 +1,13 @@
 /**
  * Redis Module
  * Provides Redis connection for event publishing
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
 import { Module, Global } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import Redis, { RedisOptions } from 'ioredis';
 import { RedisService } from './redis.service';
 
 @Global()
@@ -14,16 +15,26 @@ import { RedisService } from './redis.service';
   providers: [
     {
       provide: 'REDIS_CLIENT',
-      useFactory: async (configService: ConfigService) => {
-        const Redis = require('ioredis');
-        const client = new Redis({
-          host: configService.get('REDIS_HOST', 'localhost'),
-          port: configService.get('REDIS_PORT', 6379),
-          password: configService.get('REDIS_PASSWORD'),
-          db: configService.get('REDIS_DB', 0),
-        });
+      useFactory: (configService: ConfigService): Redis => {
+        const redisHost: string = configService.get<string>(
+          'REDIS_HOST',
+          'localhost',
+        );
+        const redisPort: number = configService.get<number>('REDIS_PORT', 6379);
+        const redisPassword: string | undefined =
+          configService.get<string>('REDIS_PASSWORD');
+        const redisDb: number = configService.get<number>('REDIS_DB', 0);
 
-        client.on('error', (err) => {
+        const redisOptions: RedisOptions = {
+          host: redisHost,
+          port: redisPort,
+          password: redisPassword,
+          db: redisDb,
+        };
+
+        const client: Redis = new Redis(redisOptions);
+
+        client.on('error', (err: Error) => {
           console.error('Redis Client Error:', err);
         });
 

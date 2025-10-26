@@ -1,11 +1,17 @@
 /**
  * Stripe Service
  * Handles all Stripe API interactions for payments and subscriptions
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
-import { Injectable, Logger, BadRequestException, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import '../types/external';
 import Stripe from 'stripe';
@@ -15,8 +21,23 @@ import {
   SubscriptionStatus,
   PaymentStatus,
   InvoiceStatus,
+  BillingHistory,
+  PaymentMethod,
 } from '@prisma/client';
 import { SubscriptionPlan } from '../config/stripe.config';
+
+/**
+ * Interface for Stripe configuration
+ */
+interface StripeConfig {
+  secretKey: string;
+  webhookSecret: string;
+  publishableKey: string;
+  currency: string;
+  apiVersion: Stripe.LatestApiVersion;
+  webhookEvents: string[];
+  plans: Record<string, SubscriptionPlan>;
+}
 
 @Injectable()
 export class StripeService {
@@ -28,7 +49,10 @@ export class StripeService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    const stripeConfig = this.configService.get('stripe');
+    const stripeConfig = this.configService.get<StripeConfig>('stripe');
+    if (!stripeConfig) {
+      throw new Error('Stripe configuration is missing');
+    }
     this.stripe = new Stripe(stripeConfig.secretKey, {
       apiVersion: stripeConfig.apiVersion,
       typescript: true,
@@ -40,9 +64,9 @@ export class StripeService {
    * Create or retrieve existing Stripe customer
    */
   async createOrGetCustomer(
-    userId: string, 
-    email: string, 
-    name?: string
+    userId: string,
+    email: string,
+    name?: string,
   ): Promise<string> {
     try {
       // Check if user already has a Stripe customer ID
@@ -80,7 +104,9 @@ export class StripeService {
         },
       });
 
-      this.logger.log(`Created Stripe customer ${customer.id} for user ${userId}`);
+      this.logger.log(
+        `Created Stripe customer ${customer.id} for user ${userId}`,
+      );
       return customer.id;
     } catch (error) {
       this.logger.error('Error creating/getting Stripe customer:', error);
@@ -188,11 +214,11 @@ export class StripeService {
       });
 
       // Create subscription
-      const stripeSubscription: any = await this.stripe.subscriptions.create({
+      const stripeSubscription = await this.stripe.subscriptions.create({
         customer: subscription.stripeCustomerId,
         items: [{ price: plan.stripePriceId }],
         payment_behavior: 'default_incomplete',
-        payment_settings: { 
+        payment_settings: {
           save_default_payment_method: 'on_subscription',
         },
         expand: ['latest_invoice.payment_intent'],
@@ -202,6 +228,13 @@ export class StripeService {
         },
       });
 
+      // Extract subscription data with proper types
+      const subscriptionData = stripeSubscription as unknown as {
+        current_period_start: number;
+        current_period_end: number;
+        cancel_at_period_end: boolean;
+      };
+
       // Update subscription in database
       await this.prisma.subscription.update({
         where: { userId },
@@ -209,21 +242,36 @@ export class StripeService {
           subscriptionTier: plan.tier as SubscriptionTier,
           stripeSubscriptionId: stripeSubscription.id,
           status: stripeSubscription.status.toUpperCase() as SubscriptionStatus,
-          currentPeriodStart: new Date(stripeSubscription.current_period_start * 1000),
-          currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
-          cancelAtPeriodEnd: stripeSubscription.cancel_at_period_end,
+          currentPeriodStart: new Date(
+            subscriptionData.current_period_start * 1000,
+          ),
+          currentPeriodEnd: new Date(
+            subscriptionData.current_period_end * 1000,
+          ),
+          cancelAtPeriodEnd: subscriptionData.cancel_at_period_end,
           planId,
         },
       });
 
-      const latestInvoice = stripeSubscription.latest_invoice as Stripe.Invoice;
-      const paymentIntent = (latestInvoice as any)?.payment_intent as Stripe.PaymentIntent;
+      const latestInvoice = stripeSubscription.latest_invoice;
+      let clientSecret: string | null = null;
+
+      if (latestInvoice && typeof latestInvoice === 'object') {
+        const invoice = latestInvoice;
+        const paymentIntent = (invoice as { payment_intent?: unknown })
+          .payment_intent;
+        if (paymentIntent && typeof paymentIntent === 'object') {
+          const secret = (paymentIntent as { client_secret?: string | null })
+            .client_secret;
+          clientSecret = secret ?? null;
+        }
+      }
 
       return {
         subscriptionId: stripeSubscription.id,
-        clientSecret: paymentIntent?.client_secret,
+        clientSecret,
         status: stripeSubscription.status,
-        currentPeriodEnd: new Date(stripeSubscription.current_period_end * 1000),
+        currentPeriodEnd: new Date(subscriptionData.current_period_end * 1000),
       };
     } catch (error) {
       this.logger.error('Error creating subscription:', error);
@@ -261,10 +309,12 @@ export class StripeService {
         }
 
         // Update subscription item
-        updateData.items = [{
-          id: stripeSubscription.items.data[0]?.id,
-          price: plan.stripePriceId,
-        }];
+        updateData.items = [
+          {
+            id: stripeSubscription.items.data[0]?.id,
+            price: plan.stripePriceId,
+          },
+        ];
         updateData.proration_behavior = 'create_prorations';
       }
 
@@ -281,7 +331,7 @@ export class StripeService {
       await this.prisma.subscription.update({
         where: { userId },
         data: {
-          ...(newPlanId && { 
+          ...(newPlanId && {
             planId: newPlanId,
             subscriptionTier: this.plans[newPlanId].tier as SubscriptionTier,
           }),
@@ -311,8 +361,10 @@ export class StripeService {
       }
 
       if (immediately) {
-        await this.stripe.subscriptions.cancel(subscription.stripeSubscriptionId);
-        
+        await this.stripe.subscriptions.cancel(
+          subscription.stripeSubscriptionId,
+        );
+
         await this.prisma.subscription.update({
           where: { userId },
           data: {
@@ -321,9 +373,12 @@ export class StripeService {
           },
         });
       } else {
-        await this.stripe.subscriptions.update(subscription.stripeSubscriptionId, {
-          cancel_at_period_end: true,
-        });
+        await this.stripe.subscriptions.update(
+          subscription.stripeSubscriptionId,
+          {
+            cancel_at_period_end: true,
+          },
+        );
 
         await this.prisma.subscription.update({
           where: { userId },
@@ -341,7 +396,7 @@ export class StripeService {
   /**
    * Get billing history for user
    */
-  async getBillingHistory(userId: string) {
+  async getBillingHistory(userId: string): Promise<BillingHistory[]> {
     try {
       const subscription = await this.prisma.subscription.findUnique({
         where: { userId },
@@ -357,13 +412,13 @@ export class StripeService {
       });
 
       // Store invoices in database
-      const billingHistory: any[] = [];
+      const billingHistory: BillingHistory[] = [];
       for (const invoice of invoices.data) {
         const record = await this.prisma.billingHistory.upsert({
           where: { stripeInvoiceId: invoice.id },
           create: {
             userId,
-            stripeInvoiceId: invoice.id!,
+            stripeInvoiceId: invoice.id,
             type: 'subscription_payment',
             amount: invoice.amount_paid || 0,
             currency: invoice.currency,
@@ -391,7 +446,7 @@ export class StripeService {
   /**
    * Get user's payment methods
    */
-  async getPaymentMethods(userId: string) {
+  async getPaymentMethods(userId: string): Promise<PaymentMethod[]> {
     try {
       const subscription = await this.prisma.subscription.findUnique({
         where: { userId },
@@ -406,14 +461,17 @@ export class StripeService {
         type: 'card',
       });
 
-      const customer = await this.stripe.customers.retrieve(
+      const customer = (await this.stripe.customers.retrieve(
         subscription.stripeCustomerId,
-      ) as Stripe.Customer;
-      
-      const defaultPaymentMethodId = customer.invoice_settings?.default_payment_method;
+      )) as Stripe.Customer;
+
+      const defaultPaymentMethodId =
+        typeof customer.invoice_settings?.default_payment_method === 'string'
+          ? customer.invoice_settings.default_payment_method
+          : customer.invoice_settings?.default_payment_method?.id || null;
 
       // Store payment methods in database
-      const methods: any[] = [];
+      const methods: PaymentMethod[] = [];
       for (const pm of paymentMethods.data) {
         const method = await this.prisma.paymentMethod.upsert({
           where: { stripePaymentMethodId: pm.id },
@@ -564,13 +622,19 @@ export class StripeService {
   /**
    * Cancel subscription immediately
    */
-  async cancelSubscriptionImmediately(userId: string, subscriptionId: string): Promise<void> {
+  async cancelSubscriptionImmediately(
+    userId: string,
+    subscriptionId: string,
+  ): Promise<void> {
     try {
       const subscription = await this.prisma.subscription.findUnique({
         where: { userId },
       });
 
-      if (!subscription || subscription.stripeSubscriptionId !== subscriptionId) {
+      if (
+        !subscription ||
+        subscription.stripeSubscriptionId !== subscriptionId
+      ) {
         throw new NotFoundException('Subscription not found');
       }
 
@@ -601,14 +665,20 @@ export class StripeService {
         where: { userId },
       });
 
-      if (!subscription || subscription.stripeSubscriptionId !== subscriptionId) {
+      if (
+        !subscription ||
+        subscription.stripeSubscriptionId !== subscriptionId
+      ) {
         throw new NotFoundException('Subscription not found');
       }
 
       // Reactivate in Stripe
-      const stripeSubscription = await this.stripe.subscriptions.update(subscriptionId, {
-        cancel_at_period_end: false,
-      });
+      const stripeSubscription = await this.stripe.subscriptions.update(
+        subscriptionId,
+        {
+          cancel_at_period_end: false,
+        },
+      );
 
       // Update database
       await this.prisma.subscription.update({
@@ -619,11 +689,15 @@ export class StripeService {
         },
       });
 
+      const reactivatedData = stripeSubscription as unknown as {
+        current_period_end: number;
+      };
+
       return {
         subscriptionId: stripeSubscription.id,
         clientSecret: null,
         status: SubscriptionStatus.ACTIVE,
-        currentPeriodEnd: new Date((stripeSubscription as any).current_period_end * 1000),
+        currentPeriodEnd: new Date(reactivatedData.current_period_end * 1000),
       };
     } catch (error) {
       this.logger.error('Error reactivating subscription:', error);

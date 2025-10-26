@@ -1,7 +1,7 @@
 /**
  * Prisma Module
  * Provides database access throughout the application
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 

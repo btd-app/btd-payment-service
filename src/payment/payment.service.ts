@@ -1,9 +1,67 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
+import { SubscriptionStatus, SubscriptionTier } from '@prisma/client';
 import axios from 'axios';
-import * as crypto from 'crypto';
-import * as jwt from 'jsonwebtoken';
+
+/**
+ * Apple receipt verification response structure
+ */
+interface AppleReceiptInfo {
+  product_id: string;
+  transaction_id: string;
+  original_transaction_id: string;
+  expires_date_ms: string;
+  is_in_billing_retry_period?: string;
+  is_trial_period?: string;
+  is_in_intro_offer_period?: string;
+}
+
+/**
+ * Apple receipt data embedded in verification response
+ */
+interface AppleReceipt {
+  in_app?: AppleReceiptInfo[];
+}
+
+/**
+ * Complete Apple verification response from their API
+ */
+interface AppleVerificationResponse {
+  status: number;
+  latest_receipt_info?: AppleReceiptInfo[];
+  receipt?: AppleReceipt;
+}
+
+/**
+ * Apple webhook JWT payload structure
+ */
+interface AppleWebhookPayload {
+  notificationType: string;
+  data: {
+    originalTransactionId?: string;
+    autoRenewStatus?: string;
+    expiresDate?: string;
+    transactionId?: string;
+  };
+}
+
+/**
+ * Subscription data returned from Prisma
+ */
+interface SubscriptionData {
+  id: string;
+  userId: string;
+  subscriptionTier?: SubscriptionTier;
+  status: string;
+  currentPeriodStart: Date;
+  currentPeriodEnd: Date;
+  autoRenew: boolean;
+  isTrial: boolean;
+  tier?: SubscriptionTier;
+  startsAt?: Date;
+  expiresAt?: Date;
+}
 
 @Injectable()
 export class PaymentService {
@@ -19,9 +77,10 @@ export class PaymentService {
     this.environment = this.config.get('NODE_ENV') ?? 'development';
     this.applePassword = this.config.get('APPLE_SHARED_SECRET') ?? '';
 
-    this.appleVerifyUrl = this.environment === 'production'
-      ? 'https://buy.itunes.apple.com/verifyReceipt'
-      : 'https://sandbox.itunes.apple.com/verifyReceipt';
+    this.appleVerifyUrl =
+      this.environment === 'production'
+        ? 'https://buy.itunes.apple.com/verifyReceipt'
+        : 'https://sandbox.itunes.apple.com/verifyReceipt';
   }
 
   async validateAppleReceipt(data: {
@@ -33,10 +92,14 @@ export class PaymentService {
 
     try {
       // Verify receipt with Apple
-      const verificationResponse = await this.verifyWithApple(data.receipt_data);
+      const verificationResponse = await this.verifyWithApple(
+        data.receipt_data,
+      );
 
       if (verificationResponse.status !== 0) {
-        throw new Error(`Apple verification failed with status: ${verificationResponse.status}`);
+        throw new Error(
+          `Apple verification failed with status: ${verificationResponse.status}`,
+        );
       }
 
       // Parse latest receipt info
@@ -63,13 +126,17 @@ export class PaymentService {
         };
       } else {
         // This shouldn't happen for subscription validation
-        throw new Error('Receipt is for a consumable product, not a subscription');
+        throw new Error(
+          'Receipt is for a consumable product, not a subscription',
+        );
       }
     } catch (error) {
-      this.logger.error(`Receipt validation failed: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Receipt validation failed: ${errorMessage}`);
       return {
         success: false,
-        error_message: error.message,
+        error_message: errorMessage,
       };
     }
   }
@@ -82,7 +149,7 @@ export class PaymentService {
 
     try {
       // Verify JWT signature
-      const payload = await this.verifyAppleJWT(data.signed_payload);
+      const payload = this.verifyAppleJWT(data.signed_payload);
 
       // Log webhook for audit
       await this.prisma.appleWebhookLog.create({
@@ -114,7 +181,9 @@ export class PaymentService {
           break;
         default:
           actionTaken = 'ignored';
-          this.logger.warn(`Unhandled notification type: ${payload.notificationType}`);
+          this.logger.warn(
+            `Unhandled notification type: ${payload.notificationType}`,
+          );
       }
 
       // Update webhook log
@@ -135,7 +204,9 @@ export class PaymentService {
         action_taken: actionTaken,
       };
     } catch (error) {
-      this.logger.error(`Webhook processing failed: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Webhook processing failed: ${errorMessage}`);
 
       // Log failed webhook
       await this.prisma.appleWebhookLog.create({
@@ -143,13 +214,13 @@ export class PaymentService {
           notificationType: 'unknown',
           signedPayload: data.signed_payload,
           status: 'failed',
-          errorMessage: error.message,
+          errorMessage,
         },
       });
 
       return {
         success: false,
-        error_message: error.message,
+        error_message: errorMessage,
       };
     }
   }
@@ -164,12 +235,16 @@ export class PaymentService {
 
     try {
       // Check if transaction already processed
-      const existingTransaction = await this.prisma.appleTransaction.findUnique({
-        where: { transactionId: data.transaction_id },
-      });
+      const existingTransaction = await this.prisma.appleTransaction.findUnique(
+        {
+          where: { transactionId: data.transaction_id },
+        },
+      );
 
       if (existingTransaction) {
-        this.logger.warn(`Transaction already processed: ${data.transaction_id}`);
+        this.logger.warn(
+          `Transaction already processed: ${data.transaction_id}`,
+        );
         return {
           success: false,
           error_message: 'Transaction already processed',
@@ -177,15 +252,19 @@ export class PaymentService {
       }
 
       // Verify receipt with Apple
-      const verificationResponse = await this.verifyWithApple(data.receipt_data);
+      const verificationResponse = await this.verifyWithApple(
+        data.receipt_data,
+      );
 
       if (verificationResponse.status !== 0) {
-        throw new Error(`Apple verification failed with status: ${verificationResponse.status}`);
+        throw new Error(
+          `Apple verification failed with status: ${verificationResponse.status}`,
+        );
       }
 
       // Find the specific transaction
       const transaction = verificationResponse.receipt?.in_app?.find(
-        (t: any) => t.transaction_id === data.transaction_id,
+        (t) => t.transaction_id === data.transaction_id,
       );
 
       if (!transaction) {
@@ -205,17 +284,22 @@ export class PaymentService {
       });
 
       // Grant consumable items
-      const granted = await this.grantConsumableItems(data.user_id, data.product_id);
+      const granted = await this.grantConsumableItems(
+        data.user_id,
+        data.product_id,
+      );
 
       return {
         success: true,
         granted,
       };
     } catch (error) {
-      this.logger.error(`Consumable purchase failed: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Consumable purchase failed: ${errorMessage}`);
       return {
         success: false,
-        error_message: error.message,
+        error_message: errorMessage,
       };
     }
   }
@@ -252,7 +336,9 @@ export class PaymentService {
         usage,
       };
     } catch (error) {
-      this.logger.error(`Get subscription failed: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Get subscription failed: ${errorMessage}`);
       return {
         has_subscription: false,
       };
@@ -278,10 +364,16 @@ export class PaymentService {
         throw new Error('No active subscription found');
       }
 
+      // Validate status is a valid SubscriptionStatus
+      const validStatuses: string[] = Object.values(SubscriptionStatus);
+      if (!validStatuses.includes(data.status)) {
+        throw new Error(`Invalid status: ${data.status}`);
+      }
+
       const updated = await this.prisma.subscription.update({
         where: { id: subscription.id },
         data: {
-          status: data.status as any,
+          status: data.status as SubscriptionStatus,
           cancelledAt: data.status === 'CANCELLED' ? new Date() : undefined,
         },
       });
@@ -291,7 +383,9 @@ export class PaymentService {
         subscription: await this.formatSubscription(updated),
       };
     } catch (error) {
-      this.logger.error(`Update subscription failed: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Update subscription failed: ${errorMessage}`);
       return {
         success: false,
       };
@@ -317,7 +411,9 @@ export class PaymentService {
         throw new Error('No active subscription found');
       }
 
-      const cancellationDate = data.immediate ? new Date() : subscription.currentPeriodEnd;
+      const cancellationDate = data.immediate
+        ? new Date()
+        : subscription.currentPeriodEnd;
 
       await this.prisma.subscription.update({
         where: { id: subscription.id },
@@ -333,7 +429,9 @@ export class PaymentService {
         cancellation_date: cancellationDate.toISOString(),
       };
     } catch (error) {
-      this.logger.error(`Cancel subscription failed: ${error.message}`);
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Cancel subscription failed: ${errorMessage}`);
       return {
         success: false,
       };
@@ -342,23 +440,41 @@ export class PaymentService {
 
   // Private helper methods
 
-  private async verifyWithApple(receiptData: string) {
-    const response = await axios.post(this.appleVerifyUrl, {
-      'receipt-data': receiptData,
-      password: this.applePassword,
-      'exclude-old-transactions': true,
-    });
+  /**
+   * Verify receipt with Apple's verification API
+   * @param receiptData Base64-encoded receipt data from client
+   * @returns Typed Apple verification response
+   */
+  private async verifyWithApple(
+    receiptData: string,
+  ): Promise<AppleVerificationResponse> {
+    const response = await axios.post<AppleVerificationResponse>(
+      this.appleVerifyUrl,
+      {
+        'receipt-data': receiptData,
+        password: this.applePassword,
+        'exclude-old-transactions': true,
+      },
+    );
 
     return response.data;
   }
 
-  private async verifyAppleJWT(signedPayload: string): Promise<any> {
+  /**
+   * Verify Apple JWT webhook payload
+   * @param signedPayload JWT signed by Apple
+   * @returns Decoded webhook payload
+   */
+  private verifyAppleJWT(signedPayload: string): AppleWebhookPayload {
     // In production, verify with Apple's public key
     // For now, decode without verification (development only)
     if (this.environment === 'development') {
       const parts = signedPayload.split('.');
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-      return payload.data;
+      const payloadString = Buffer.from(parts[1], 'base64').toString();
+      const decoded = JSON.parse(payloadString) as {
+        data: AppleWebhookPayload;
+      };
+      return decoded.data;
     }
 
     // Production: Verify with Apple's public key
@@ -366,12 +482,19 @@ export class PaymentService {
     throw new Error('JWT verification not implemented for production');
   }
 
+  /**
+   * Process subscription receipt from Apple verification
+   * @param userId User ID
+   * @param receiptInfo Receipt information from Apple
+   * @param verificationResponse Full verification response (unused but kept for future use)
+   * @returns Created or updated subscription
+   */
   private async processSubscriptionReceipt(
     userId: string,
-    receiptInfo: any,
-    verificationResponse: any,
-  ) {
-    const expiresMs = parseInt(receiptInfo.expires_date_ms);
+    receiptInfo: AppleReceiptInfo,
+    _verificationResponse: AppleVerificationResponse,
+  ): Promise<SubscriptionData> {
+    const expiresMs = parseInt(receiptInfo.expires_date_ms, 10);
     const expiresAt = new Date(expiresMs);
     const productId = receiptInfo.product_id;
     const transactionId = receiptInfo.transaction_id;
@@ -436,11 +559,20 @@ export class PaymentService {
     return subscription;
   }
 
-  private getTierFromProductId(productId: string): 'DISCOVER' | 'CONNECT' | 'COMMUNITY' {
+  private getTierFromProductId(
+    productId: string,
+  ): 'DISCOVER' | 'CONNECT' | 'COMMUNITY' {
     // Map Apple product IDs to subscription tiers
-    if (productId.includes('community') || productId.includes('platinum')) return 'COMMUNITY';
-    if (productId.includes('connect') || productId.includes('gold')) return 'CONNECT';
-    if (productId.includes('discover') || productId.includes('plus') || productId.includes('basic')) return 'DISCOVER';
+    if (productId.includes('community') || productId.includes('platinum'))
+      return 'COMMUNITY';
+    if (productId.includes('connect') || productId.includes('gold'))
+      return 'CONNECT';
+    if (
+      productId.includes('discover') ||
+      productId.includes('plus') ||
+      productId.includes('basic')
+    )
+      return 'DISCOVER';
     return 'DISCOVER';
   }
 
@@ -457,8 +589,34 @@ export class PaymentService {
     });
   }
 
-  private getFeaturesForTier(tier: string) {
-    const tiers: Record<string, any> = {
+  /**
+   * Get premium features configuration for a subscription tier
+   * @param tier Subscription tier name
+   * @returns Feature configuration object
+   */
+  private getFeaturesForTier(tier: string): {
+    unlimitedLikes: boolean;
+    whoLikedMe: boolean;
+    topPicks: boolean;
+    rewind: boolean;
+    passport: boolean;
+    incognito: boolean;
+    boostsRemaining: number;
+    superLikesRemaining: number;
+  } {
+    const tiers: Record<
+      string,
+      {
+        unlimitedLikes: boolean;
+        whoLikedMe: boolean;
+        topPicks: boolean;
+        rewind: boolean;
+        passport: boolean;
+        incognito: boolean;
+        boostsRemaining: number;
+        superLikesRemaining: number;
+      }
+    > = {
       platinum: {
         unlimitedLikes: true,
         whoLikedMe: true,
@@ -514,8 +672,17 @@ export class PaymentService {
     return tiers[tier] || tiers.free;
   }
 
-  private async grantConsumableItems(userId: string, productId: string) {
-    const grants: Record<string, any> = {
+  /**
+   * Grant consumable items (boosts, super likes) based on product ID
+   * @param userId User ID to grant items to
+   * @param productId Product ID that was purchased
+   * @returns Grant details including type and quantity
+   */
+  private async grantConsumableItems(
+    userId: string,
+    productId: string,
+  ): Promise<{ type: string; quantity: number }> {
+    const grants: Record<string, { type: string; quantity: number }> = {
       'com.btdapp.boost.pack5': { type: 'boost', quantity: 5 },
       'com.btdapp.boost.pack10': { type: 'boost', quantity: 10 },
       'com.btdapp.superlike.pack5': { type: 'super_like', quantity: 5 },
@@ -528,7 +695,7 @@ export class PaymentService {
     }
 
     // Update user features
-    const features = await this.prisma.userPremiumFeatures.upsert({
+    await this.prisma.userPremiumFeatures.upsert({
       where: { userId },
       create: {
         userId,
@@ -536,12 +703,12 @@ export class PaymentService {
         superLikesRemaining: grant.type === 'super_like' ? grant.quantity : 0,
       },
       update: {
-        boostsRemaining: grant.type === 'boost'
-          ? { increment: grant.quantity }
-          : undefined,
-        superLikesRemaining: grant.type === 'super_like'
-          ? { increment: grant.quantity }
-          : undefined,
+        boostsRemaining:
+          grant.type === 'boost' ? { increment: grant.quantity } : undefined,
+        superLikesRemaining:
+          grant.type === 'super_like'
+            ? { increment: grant.quantity }
+            : undefined,
       },
     });
 
@@ -600,45 +767,73 @@ export class PaymentService {
     };
   }
 
-  private async formatSubscription(subscription: any) {
+  /**
+   * Format subscription data for API response
+   * @param subscription Prisma subscription object
+   * @returns Formatted subscription data or null
+   */
+  private async formatSubscription(
+    subscription: SubscriptionData | null,
+  ): Promise<Record<string, unknown> | null> {
     if (!subscription) return null;
 
     // Get plan details
+    const tierValue = subscription.tier ?? subscription.subscriptionTier;
     const plan = await this.prisma.subscriptionPlan.findFirst({
       where: {
-        tier: subscription.tier,
+        tier: tierValue,
       },
     });
 
     return {
       id: subscription.id,
       user_id: subscription.userId,
-      plan: plan ? {
-        id: plan.id,
-        name: plan.name,
-        tier: plan.tier,
-        duration: plan.duration,
-        price: {
-          amount: plan.price.toNumber(),
-          currency: plan.currency,
-          formatted: `$${plan.price.toFixed(2)}`,
-        },
-        features: plan.features as any[],
-      } : null,
+      plan: plan
+        ? {
+            id: plan.id,
+            name: plan.name,
+            tier: plan.tier,
+            duration: plan.duration,
+            price: {
+              amount: plan.price.toNumber(),
+              currency: plan.currency,
+              formatted: `$${plan.price.toFixed(2)}`,
+            },
+            features: plan.features as unknown[],
+          }
+        : null,
       status: subscription.status,
-      start_date: subscription.startsAt.toISOString(),
-      end_date: subscription.expiresAt.toISOString(),
-      next_billing_date: subscription.autoRenew ? subscription.expiresAt.toISOString() : null,
+      start_date:
+        subscription.startsAt?.toISOString() ??
+        subscription.currentPeriodStart.toISOString(),
+      end_date:
+        subscription.expiresAt?.toISOString() ??
+        subscription.currentPeriodEnd.toISOString(),
+      next_billing_date: subscription.autoRenew
+        ? (subscription.expiresAt?.toISOString() ??
+          subscription.currentPeriodEnd.toISOString())
+        : null,
       auto_renew: subscription.autoRenew,
       is_trial: subscription.isTrial,
-      tier: subscription.tier,
+      tier: subscription.tier ?? subscription.subscriptionTier,
     };
   }
 
   // Webhook handlers
 
-  private async handleRenewalStatusChange(payload: any): Promise<string> {
+  /**
+   * Handle renewal status change webhook from Apple
+   * @param payload Apple webhook payload
+   * @returns Status message
+   */
+  private async handleRenewalStatusChange(
+    payload: AppleWebhookPayload,
+  ): Promise<string> {
     const { originalTransactionId, autoRenewStatus } = payload.data;
+
+    if (!originalTransactionId) {
+      throw new Error('Missing originalTransactionId in payload');
+    }
 
     await this.prisma.subscription.updateMany({
       where: { appleOriginalTransactionId: originalTransactionId },
@@ -648,13 +843,24 @@ export class PaymentService {
     return `Updated auto-renew to ${autoRenewStatus === '1'}`;
   }
 
-  private async handleSubscriptionRenewal(payload: any): Promise<string> {
+  /**
+   * Handle subscription renewal webhook from Apple
+   * @param payload Apple webhook payload
+   * @returns Status message
+   */
+  private async handleSubscriptionRenewal(
+    payload: AppleWebhookPayload,
+  ): Promise<string> {
     const { originalTransactionId, expiresDate } = payload.data;
+
+    if (!originalTransactionId || !expiresDate) {
+      throw new Error('Missing required fields in payload');
+    }
 
     await this.prisma.subscription.updateMany({
       where: { appleOriginalTransactionId: originalTransactionId },
       data: {
-        currentPeriodEnd: new Date(parseInt(expiresDate)),
+        currentPeriodEnd: new Date(parseInt(expiresDate, 10)),
         lastRenewedAt: new Date(),
         status: 'ACTIVE',
       },
@@ -663,8 +869,19 @@ export class PaymentService {
     return 'Subscription renewed';
   }
 
-  private async handleSubscriptionExpired(payload: any): Promise<string> {
+  /**
+   * Handle subscription expired webhook from Apple
+   * @param payload Apple webhook payload
+   * @returns Status message
+   */
+  private async handleSubscriptionExpired(
+    payload: AppleWebhookPayload,
+  ): Promise<string> {
     const { originalTransactionId } = payload.data;
+
+    if (!originalTransactionId) {
+      throw new Error('Missing originalTransactionId in payload');
+    }
 
     await this.prisma.subscription.updateMany({
       where: { appleOriginalTransactionId: originalTransactionId },
@@ -674,8 +891,17 @@ export class PaymentService {
     return 'Subscription expired';
   }
 
-  private async handleRefund(payload: any): Promise<string> {
+  /**
+   * Handle refund webhook from Apple
+   * @param payload Apple webhook payload
+   * @returns Status message
+   */
+  private async handleRefund(payload: AppleWebhookPayload): Promise<string> {
     const { originalTransactionId, transactionId } = payload.data;
+
+    if (!transactionId) {
+      throw new Error('Missing transactionId in payload');
+    }
 
     // Mark transaction as refunded
     await this.prisma.appleTransaction.updateMany({
@@ -683,17 +909,30 @@ export class PaymentService {
       data: { status: 'refunded' },
     });
 
-    // Cancel subscription
-    await this.prisma.subscription.updateMany({
-      where: { appleOriginalTransactionId: originalTransactionId },
-      data: { status: 'CANCELLED' },
-    });
+    // Cancel subscription if originalTransactionId is provided
+    if (originalTransactionId) {
+      await this.prisma.subscription.updateMany({
+        where: { appleOriginalTransactionId: originalTransactionId },
+        data: { status: 'CANCELLED' },
+      });
+    }
 
     return 'Refund processed';
   }
 
-  private async handleFailedRenewal(payload: any): Promise<string> {
+  /**
+   * Handle failed renewal webhook from Apple
+   * @param payload Apple webhook payload
+   * @returns Status message
+   */
+  private async handleFailedRenewal(
+    payload: AppleWebhookPayload,
+  ): Promise<string> {
     const { originalTransactionId } = payload.data;
+
+    if (!originalTransactionId) {
+      throw new Error('Missing originalTransactionId in payload');
+    }
 
     await this.prisma.subscription.updateMany({
       where: { appleOriginalTransactionId: originalTransactionId },

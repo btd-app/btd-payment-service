@@ -14,7 +14,9 @@ export class PaymentController {
     user_id: string;
     source: string;
   }) {
-    this.logger.debug(`[gRPC] ValidateAppleReceipt called for user: ${data.user_id}`);
+    this.logger.debug(
+      `[gRPC] ValidateAppleReceipt called for user: ${data.user_id}`,
+    );
     return this.paymentService.validateAppleReceipt(data);
   }
 
@@ -34,13 +36,17 @@ export class PaymentController {
     transaction_id: string;
     receipt_data: string;
   }) {
-    this.logger.debug(`[gRPC] ProcessConsumablePurchase called for product: ${data.product_id}`);
+    this.logger.debug(
+      `[gRPC] ProcessConsumablePurchase called for product: ${data.product_id}`,
+    );
     return this.paymentService.processConsumablePurchase(data);
   }
 
   @GrpcMethod('PaymentService', 'GetUserSubscription')
   async getUserSubscription(data: { user_id: string }) {
-    this.logger.debug(`[gRPC] GetUserSubscription called for user: ${data.user_id}`);
+    this.logger.debug(
+      `[gRPC] GetUserSubscription called for user: ${data.user_id}`,
+    );
     return this.paymentService.getUserSubscription(data);
   }
 
@@ -50,7 +56,9 @@ export class PaymentController {
     status: string;
     reason: string;
   }) {
-    this.logger.debug(`[gRPC] UpdateSubscriptionStatus called for user: ${data.user_id}`);
+    this.logger.debug(
+      `[gRPC] UpdateSubscriptionStatus called for user: ${data.user_id}`,
+    );
     return this.paymentService.updateSubscriptionStatus(data);
   }
 
@@ -60,7 +68,9 @@ export class PaymentController {
     reason: string;
     immediate: boolean;
   }) {
-    this.logger.debug(`[gRPC] CancelSubscription called for user: ${data.user_id}`);
+    this.logger.debug(
+      `[gRPC] CancelSubscription called for user: ${data.user_id}`,
+    );
     return this.paymentService.cancelSubscription(data);
   }
 
@@ -70,10 +80,14 @@ export class PaymentController {
     limit: number;
     offset: number;
   }) {
-    this.logger.debug(`[gRPC] GetTransactionHistory called for user: ${data.user_id}`);
+    this.logger.debug(
+      `[gRPC] GetTransactionHistory called for user: ${data.user_id}`,
+    );
 
     try {
-      const transactions = await this.paymentService['prisma'].appleTransaction.findMany({
+      const transactions = await this.paymentService[
+        'prisma'
+      ].appleTransaction.findMany({
         where: { userId: data.user_id },
         take: data.limit || 10,
         skip: data.offset || 0,
@@ -85,7 +99,7 @@ export class PaymentController {
       });
 
       return {
-        transactions: transactions.map(t => ({
+        transactions: transactions.map((t) => ({
           id: t.id,
           user_id: t.userId,
           transaction_id: t.transactionId,
@@ -100,8 +114,10 @@ export class PaymentController {
         })),
         total,
       };
-    } catch (error) {
-      this.logger.error(`Get transaction history failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Get transaction history failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
       return {
         transactions: [],
         total: 0,
@@ -118,10 +134,14 @@ export class PaymentController {
     amount: number;
     currency: string;
   }) {
-    this.logger.debug(`[gRPC] RecordTransaction called for transaction: ${data.transaction_id}`);
+    this.logger.debug(
+      `[gRPC] RecordTransaction called for transaction: ${data.transaction_id}`,
+    );
 
     try {
-      const transaction = await this.paymentService['prisma'].appleTransaction.create({
+      const transaction = await this.paymentService[
+        'prisma'
+      ].appleTransaction.create({
         data: {
           userId: data.user_id,
           transactionId: data.transaction_id,
@@ -149,8 +169,10 @@ export class PaymentController {
           created_at: transaction.createdAt.toISOString(),
         },
       };
-    } catch (error) {
-      this.logger.error(`Record transaction failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Record transaction failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
       return {
         success: false,
       };
@@ -170,8 +192,10 @@ export class PaymentController {
         timestamp: new Date().toISOString(),
         version: '1.0.0',
       };
-    } catch (error) {
-      this.logger.error(`Health check failed: ${error.message}`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
       return {
         healthy: false,
         timestamp: new Date().toISOString(),

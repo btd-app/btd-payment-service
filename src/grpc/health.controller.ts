@@ -50,7 +50,9 @@ export class HealthController {
    * Health watch method - streams health status updates
    */
   @GrpcStreamMethod('Health', 'Watch')
-  watch(data$: Observable<HealthCheckRequest>): Observable<HealthCheckResponse> {
+  watch(
+    data$: Observable<HealthCheckRequest>,
+  ): Observable<HealthCheckResponse> {
     const subject = new Subject<HealthCheckResponse>();
 
     const onNext = (request: HealthCheckRequest) => {

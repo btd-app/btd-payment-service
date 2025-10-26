@@ -1,7 +1,7 @@
 /**
  * Payment Controller
  * Handles payment-related API endpoints
- * 
+ *
  * Last Updated On: 2025-08-06
  */
 
@@ -12,7 +12,6 @@ import {
   Delete,
   Body,
   Param,
-  UseGuards,
   Req,
   HttpStatus,
   HttpCode,
@@ -28,7 +27,6 @@ import { StripeService } from '../services/stripe.service';
 import {
   CreatePaymentIntentDto,
   CreateSetupIntentDto,
-  SetDefaultPaymentMethodDto,
   PaymentIntentResponseDto,
   SetupIntentResponseDto,
   PaymentMethodDto,
@@ -60,7 +58,7 @@ export class PaymentController {
     description: 'Returns list of available subscription plans',
     type: [SubscriptionPlanDto],
   })
-  async getPlans(): Promise<SubscriptionPlanDto[]> {
+  getPlans(): SubscriptionPlanDto[] {
     return this.stripeService.getAvailablePlans();
   }
 
@@ -82,10 +80,10 @@ export class PaymentController {
   ): Promise<PaymentIntentResponseDto> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
     const userEmail = req.user?.email || 'test@example.com';
-    
+
     // Ensure customer exists
     await this.stripeService.createOrGetCustomer(userId, userEmail);
-    
+
     return this.stripeService.createPaymentIntent(
       userId,
       dto.planId,
@@ -123,7 +121,9 @@ export class PaymentController {
     description: 'Returns billing history',
     type: [BillingHistoryDto],
   })
-  async getBillingHistory(@Req() req: AuthenticatedRequest): Promise<BillingHistoryDto[]> {
+  async getBillingHistory(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<BillingHistoryDto[]> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
     return this.stripeService.getBillingHistory(userId);
   }
@@ -138,7 +138,9 @@ export class PaymentController {
     description: 'Returns list of payment methods',
     type: [PaymentMethodDto],
   })
-  async getPaymentMethods(@Req() req: AuthenticatedRequest): Promise<PaymentMethodDto[]> {
+  async getPaymentMethods(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<PaymentMethodDto[]> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
     return this.stripeService.getPaymentMethods(userId);
   }
@@ -149,7 +151,10 @@ export class PaymentController {
   @Delete('payment-methods/:paymentMethodId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a payment method' })
-  @ApiParam({ name: 'paymentMethodId', description: 'Payment method ID to delete' })
+  @ApiParam({
+    name: 'paymentMethodId',
+    description: 'Payment method ID to delete',
+  })
   @ApiResponse({
     status: 204,
     description: 'Payment method deleted successfully',
@@ -169,7 +174,10 @@ export class PaymentController {
   @Post('payment-methods/:paymentMethodId/set-default')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Set default payment method' })
-  @ApiParam({ name: 'paymentMethodId', description: 'Payment method ID to set as default' })
+  @ApiParam({
+    name: 'paymentMethodId',
+    description: 'Payment method ID to set as default',
+  })
   @ApiResponse({
     status: 200,
     description: 'Default payment method set successfully',
