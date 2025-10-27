@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 
 /**
  * Webhook Controller Unit Tests
@@ -35,14 +36,6 @@ import {
   createDisputeClosedEventMock,
   createTrialWillEndEventMock,
 } from '../testing/mocks/stripe.mock';
-
-/**
- * Mock type for RawBodyRequest
- * Used for Stripe webhook signature verification
- */
-interface _RawBodyRequest extends Partial<Request> {
-  rawBody?: Buffer;
-}
 
 describe('WebhookController', () => {
   let controller: WebhookController;
