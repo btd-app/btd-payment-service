@@ -19,8 +19,6 @@ const stripe_service_1 = require("../services/stripe.service");
 const subscription_service_1 = require("../services/subscription.service");
 const subscription_dto_1 = require("../dto/subscription.dto");
 let SubscriptionController = class SubscriptionController {
-    stripeService;
-    subscriptionService;
     constructor(stripeService, subscriptionService) {
         this.stripeService = stripeService;
         this.subscriptionService = subscriptionService;
@@ -32,7 +30,7 @@ let SubscriptionController = class SubscriptionController {
     async createSubscription(dto, req) {
         const userId = req.user?.id || 'test-user';
         const userEmail = req.user?.email || 'test@example.com';
-        const customerId = await this.stripeService.createOrGetCustomer(userId, userEmail);
+        await this.stripeService.createOrGetCustomer(userId, userEmail);
         return this.stripeService.createSubscription(userId, dto.planId, dto.paymentMethodId);
     }
     async updateSubscription(subscriptionId, dto, req) {
@@ -52,7 +50,7 @@ let SubscriptionController = class SubscriptionController {
             }
         }
         if (dto.planId) {
-            await this.stripeService.updateSubscription(userId, dto.cancelAtPeriodEnd);
+            await this.stripeService.updateSubscription(userId, dto.planId, dto.cancelAtPeriodEnd);
             const subscription = await this.stripeService.getCurrentSubscription(userId);
             return {
                 subscriptionId: subscription.stripeSubscriptionId || '',
@@ -84,7 +82,7 @@ let SubscriptionController = class SubscriptionController {
         const userId = req.user?.id || 'test-user';
         return this.subscriptionService.validateFeatureAccess(userId, dto.feature);
     }
-    async getCallUsageStats(req) {
+    getCallUsageStats(req) {
         const userId = req.user?.id || 'test-user';
         return this.subscriptionService.getCallUsageStats(userId);
     }
@@ -119,7 +117,10 @@ __decorate([
         type: subscription_dto_1.SubscriptionResponseDto,
     }),
     (0, swagger_1.ApiResponse)({ status: 400, description: 'Invalid request' }),
-    (0, swagger_1.ApiResponse)({ status: 409, description: 'Active subscription already exists' }),
+    (0, swagger_1.ApiResponse)({
+        status: 409,
+        description: 'Active subscription already exists',
+    }),
     __param(0, (0, common_1.Body)()),
     __param(1, (0, common_1.Req)()),
     __metadata("design:type", Function),
@@ -129,7 +130,10 @@ __decorate([
 __decorate([
     (0, common_1.Put)(':subscriptionId'),
     (0, swagger_1.ApiOperation)({ summary: 'Update subscription (upgrade/downgrade/cancel)' }),
-    (0, swagger_1.ApiParam)({ name: 'subscriptionId', description: 'Subscription ID to update' }),
+    (0, swagger_1.ApiParam)({
+        name: 'subscriptionId',
+        description: 'Subscription ID to update',
+    }),
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Subscription updated successfully',
@@ -147,7 +151,10 @@ __decorate([
     (0, common_1.Delete)(':subscriptionId'),
     (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
     (0, swagger_1.ApiOperation)({ summary: 'Cancel subscription immediately' }),
-    (0, swagger_1.ApiParam)({ name: 'subscriptionId', description: 'Subscription ID to cancel' }),
+    (0, swagger_1.ApiParam)({
+        name: 'subscriptionId',
+        description: 'Subscription ID to cancel',
+    }),
     (0, swagger_1.ApiResponse)({
         status: 204,
         description: 'Subscription cancelled successfully',
@@ -182,7 +189,9 @@ __decorate([
 __decorate([
     (0, common_1.Post)('portal-session'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, swagger_1.ApiOperation)({ summary: 'Create Stripe Portal session for self-service subscription management' }),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Create Stripe Portal session for self-service subscription management',
+    }),
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Portal session created successfully',
@@ -214,7 +223,9 @@ __decorate([
 __decorate([
     (0, common_1.Post)('validate-feature'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
-    (0, swagger_1.ApiOperation)({ summary: 'Validate if user has access to a specific feature' }),
+    (0, swagger_1.ApiOperation)({
+        summary: 'Validate if user has access to a specific feature',
+    }),
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Feature access validation result',
@@ -237,7 +248,7 @@ __decorate([
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:returntype", subscription_dto_1.CallUsageStatsDto)
 ], SubscriptionController.prototype, "getCallUsageStats", null);
 __decorate([
     (0, common_1.Post)('track-usage'),

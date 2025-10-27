@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RedisModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
+const ioredis_1 = require("ioredis");
 const redis_service_1 = require("./redis.service");
 let RedisModule = class RedisModule {
 };
@@ -19,14 +20,18 @@ exports.RedisModule = RedisModule = __decorate([
         providers: [
             {
                 provide: 'REDIS_CLIENT',
-                useFactory: async (configService) => {
-                    const Redis = require('ioredis');
-                    const client = new Redis({
-                        host: configService.get('REDIS_HOST', 'localhost'),
-                        port: configService.get('REDIS_PORT', 6379),
-                        password: configService.get('REDIS_PASSWORD'),
-                        db: configService.get('REDIS_DB', 0),
-                    });
+                useFactory: (configService) => {
+                    const redisHost = configService.get('REDIS_HOST', 'localhost');
+                    const redisPort = configService.get('REDIS_PORT', 6379);
+                    const redisPassword = configService.get('REDIS_PASSWORD');
+                    const redisDb = configService.get('REDIS_DB', 0);
+                    const redisOptions = {
+                        host: redisHost,
+                        port: redisPort,
+                        password: redisPassword,
+                        db: redisDb,
+                    };
+                    const client = new ioredis_1.default(redisOptions);
                     client.on('error', (err) => {
                         console.error('Redis Client Error:', err);
                     });

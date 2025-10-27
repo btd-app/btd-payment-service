@@ -16,11 +16,17 @@ service UsersService {
   // Update user last seen timestamp
   rpc UpdateUserLastSeen(UpdateUserLastSeenRequest) returns (UpdateUserLastSeenResponse);
   
+  // Update user status (online/offline, last seen, location, device info)
+  rpc UpdateUserStatus(UpdateUserStatusRequest) returns (UpdateUserStatusResponse);
+  
   // Check if user exists
   rpc UserExists(UserExistsRequest) returns (UserExistsResponse);
   
   // Stream user updates (for real-time status)
   rpc StreamUserUpdates(StreamUserUpdatesRequest) returns (stream UserUpdate);
+  
+  // Get list of online users
+  rpc GetOnlineUsers(GetOnlineUsersRequest) returns (GetOnlineUsersResponse);
 }
 
 // User message
@@ -84,6 +90,20 @@ message UpdateUserLastSeenResponse {
   string message = 2;
 }
 
+message UpdateUserStatusRequest {
+  string user_id = 1;
+  optional string status = 2; // online, offline, away
+  optional int64 last_seen = 3; // timestamp in milliseconds
+  optional string device_info = 4; // JSON string with device details
+  optional string location = 5; // JSON string with location data
+}
+
+message UpdateUserStatusResponse {
+  bool success = 1;
+  string message = 2;
+  User updated_user = 3; // Return the updated user data
+}
+
 message UserExistsRequest {
   string user_id = 1;
 }
@@ -120,4 +140,14 @@ message ProfileUpdate {
 message SubscriptionUpdate {
   string new_tier = 1;
   string status = 2;
+}
+
+message GetOnlineUsersRequest {
+  optional string requester_id = 1;  // ID of the requesting user (for filtering)
+}
+
+message GetOnlineUsersResponse {
+  bool success = 1;
+  repeated User data = 2;
+  int32 count = 3;
 }

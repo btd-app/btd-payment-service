@@ -12,27 +12,27 @@ var SubscriptionService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionService = void 0;
 const common_1 = require("@nestjs/common");
+require("../types/external");
 const prisma_service_1 = require("../prisma/prisma.service");
 const client_1 = require("@prisma/client");
 let SubscriptionService = SubscriptionService_1 = class SubscriptionService {
-    prisma;
-    logger = new common_1.Logger(SubscriptionService_1.name);
     constructor(prisma) {
         this.prisma = prisma;
+        this.logger = new common_1.Logger(SubscriptionService_1.name);
     }
     async getUserSubscription(userId) {
         try {
-            const subscription = await this.prisma.userSubscription.findUnique({
+            const subscription = await this.prisma.subscription.findUnique({
                 where: { userId },
             });
-            return subscription || {
+            return (subscription || {
                 userId,
                 subscriptionTier: client_1.SubscriptionTier.DISCOVER,
                 status: client_1.SubscriptionStatus.ACTIVE,
                 currentPeriodStart: new Date(),
                 currentPeriodEnd: new Date(),
                 cancelAtPeriodEnd: false,
-            };
+            });
         }
         catch (error) {
             this.logger.error('Error getting user subscription:', error);
@@ -265,25 +265,13 @@ let SubscriptionService = SubscriptionService_1 = class SubscriptionService {
             };
         }
     }
-    async getMonthlyCallUsage(userId) {
+    getMonthlyCallUsage(..._args) {
         try {
-            const now = new Date();
-            const month = now.getMonth() + 1;
-            const year = now.getFullYear();
-            const stats = await this.prisma.callUsageStats.findUnique({
-                where: {
-                    userId_month_year: {
-                        userId,
-                        month,
-                        year,
-                    },
-                },
-            });
             return {
-                totalCalls: stats?.totalCalls || 0,
-                totalMinutes: stats?.totalMinutes || 0,
-                videoCalls: stats?.videoCalls || 0,
-                audioCalls: stats?.audioCalls || 0,
+                totalCalls: 0,
+                totalMinutes: 0,
+                videoCalls: 0,
+                audioCalls: 0,
             };
         }
         catch (error) {
@@ -296,48 +284,8 @@ let SubscriptionService = SubscriptionService_1 = class SubscriptionService {
             };
         }
     }
-    async updateCallUsage(userId, callType, durationMinutes) {
-        try {
-            const now = new Date();
-            const month = now.getMonth() + 1;
-            const year = now.getFullYear();
-            await this.prisma.callUsageStats.upsert({
-                where: {
-                    userId_month_year: {
-                        userId,
-                        month,
-                        year,
-                    },
-                },
-                update: {
-                    totalCalls: { increment: 1 },
-                    totalMinutes: { increment: durationMinutes },
-                    ...(callType === 'video'
-                        ? { videoCalls: { increment: 1 } }
-                        : { audioCalls: { increment: 1 } }),
-                    lastCallAt: now,
-                    avgCallDuration: {
-                        increment: durationMinutes / 10,
-                    },
-                },
-                create: {
-                    userId,
-                    month,
-                    year,
-                    totalCalls: 1,
-                    totalMinutes: durationMinutes,
-                    videoCalls: callType === 'video' ? 1 : 0,
-                    audioCalls: callType === 'audio' ? 1 : 0,
-                    avgCallDuration: durationMinutes,
-                    callsInitiated: 1,
-                    lastCallAt: now,
-                },
-            });
-        }
-        catch (error) {
-            this.logger.error('Error updating call usage:', error);
-            throw error;
-        }
+    updateCallUsage(..._args) {
+        this.logger.debug(`Call usage tracking should be in video-call service`);
     }
     async canScheduleCalls(userId) {
         try {
@@ -367,15 +315,16 @@ let SubscriptionService = SubscriptionService_1 = class SubscriptionService {
                 data: {
                     userId,
                     feature,
-                    metadata,
+                    metadata: metadata,
                 },
             });
-            this.logger.log('Feature usage tracked', {
+            const logData = {
                 userId,
                 feature,
                 metadata,
                 timestamp: new Date().toISOString(),
-            });
+            };
+            this.logger.log('Feature usage tracked', logData);
         }
         catch (error) {
             this.logger.error('Error tracking feature usage:', error);
@@ -401,20 +350,8 @@ let SubscriptionService = SubscriptionService_1 = class SubscriptionService {
             return false;
         }
     }
-    async getCallUsageStats(userId) {
-        const now = new Date();
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
-        const stats = await this.prisma.callUsageStats.findUnique({
-            where: {
-                userId_month_year: {
-                    userId,
-                    month,
-                    year,
-                },
-            },
-        });
-        return stats || {
+    getCallUsageStats(..._args) {
+        return {
             totalCalls: 0,
             totalMinutes: 0,
             videoCalls: 0,

@@ -13,9 +13,6 @@ exports.BillingHistoryDto = exports.PaymentMethodDto = exports.SetupIntentRespon
 const class_validator_1 = require("class-validator");
 const swagger_1 = require("@nestjs/swagger");
 class CreatePaymentIntentDto {
-    planId;
-    paymentMethodId;
-    currency;
 }
 exports.CreatePaymentIntentDto = CreatePaymentIntentDto;
 __decorate([
@@ -37,7 +34,6 @@ __decorate([
     __metadata("design:type", String)
 ], CreatePaymentIntentDto.prototype, "currency", void 0);
 class CreateSetupIntentDto {
-    usage;
 }
 exports.CreateSetupIntentDto = CreateSetupIntentDto;
 __decorate([
@@ -47,7 +43,6 @@ __decorate([
     __metadata("design:type", String)
 ], CreateSetupIntentDto.prototype, "usage", void 0);
 class SetDefaultPaymentMethodDto {
-    paymentMethodId;
 }
 exports.SetDefaultPaymentMethodDto = SetDefaultPaymentMethodDto;
 __decorate([
@@ -57,15 +52,11 @@ __decorate([
     __metadata("design:type", String)
 ], SetDefaultPaymentMethodDto.prototype, "paymentMethodId", void 0);
 class PaymentIntentResponseDto {
-    clientSecret;
-    paymentIntentId;
-    amount;
-    currency;
 }
 exports.PaymentIntentResponseDto = PaymentIntentResponseDto;
 __decorate([
     (0, swagger_1.ApiProperty)(),
-    __metadata("design:type", Object)
+    __metadata("design:type", String)
 ], PaymentIntentResponseDto.prototype, "clientSecret", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)(),
@@ -80,30 +71,17 @@ __decorate([
     __metadata("design:type", String)
 ], PaymentIntentResponseDto.prototype, "currency", void 0);
 class SetupIntentResponseDto {
-    clientSecret;
-    setupIntentId;
 }
 exports.SetupIntentResponseDto = SetupIntentResponseDto;
 __decorate([
     (0, swagger_1.ApiProperty)(),
-    __metadata("design:type", Object)
+    __metadata("design:type", String)
 ], SetupIntentResponseDto.prototype, "clientSecret", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)(),
     __metadata("design:type", String)
 ], SetupIntentResponseDto.prototype, "setupIntentId", void 0);
 class PaymentMethodDto {
-    id;
-    userId;
-    stripePaymentMethodId;
-    type;
-    brand;
-    last4;
-    expiryMonth;
-    expiryYear;
-    isDefault;
-    createdAt;
-    updatedAt;
 }
 exports.PaymentMethodDto = PaymentMethodDto;
 __decorate([
@@ -151,19 +129,6 @@ __decorate([
     __metadata("design:type", Date)
 ], PaymentMethodDto.prototype, "updatedAt", void 0);
 class BillingHistoryDto {
-    id;
-    userId;
-    stripeInvoiceId;
-    amount;
-    currency;
-    status;
-    description;
-    periodStart;
-    periodEnd;
-    invoiceUrl;
-    receiptUrl;
-    pdfUrl;
-    createdAt;
 }
 exports.BillingHistoryDto = BillingHistoryDto;
 __decorate([

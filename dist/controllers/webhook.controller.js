@@ -17,20 +17,17 @@ exports.WebhookController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const config_1 = require("@nestjs/config");
+require("../types/external");
 const stripe_1 = require("stripe");
 const prisma_service_1 = require("../prisma/prisma.service");
 const client_1 = require("@prisma/client");
 let WebhookController = WebhookController_1 = class WebhookController {
-    prisma;
-    configService;
-    logger = new common_1.Logger(WebhookController_1.name);
-    stripe;
-    endpointSecret;
     constructor(prisma, configService) {
         this.prisma = prisma;
         this.configService = configService;
+        this.logger = new common_1.Logger(WebhookController_1.name);
         this.stripe = new stripe_1.default(this.configService.get('STRIPE_SECRET_KEY') || '', {
-            apiVersion: '2025-07-30.basil',
+            apiVersion: '2025-08-27.basil',
         });
         this.endpointSecret = this.configService.get('STRIPE_WEBHOOK_SECRET') || '';
     }
@@ -43,18 +40,22 @@ let WebhookController = WebhookController_1 = class WebhookController {
             const rawBody = req.rawBody || req.body || Buffer.from('');
             this.logger.debug(`Processing webhook with signature: ${signature.substring(0, 20)}...`);
             this.logger.debug(`Raw body type: ${typeof rawBody}, length: ${Buffer.isBuffer(rawBody) ? rawBody.length : 'unknown'}`);
-            const bodyBuffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody);
+            const bodyBuffer = Buffer.isBuffer(rawBody)
+                ? rawBody
+                : Buffer.from(rawBody);
             event = this.stripe.webhooks.constructEvent(bodyBuffer, signature, this.endpointSecret);
         }
         catch (err) {
-            this.logger.error(`Webhook signature verification failed: ${err.message}`);
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+            this.logger.error(`Webhook signature verification failed: ${errorMessage}`);
             throw new common_1.BadRequestException('Invalid webhook signature');
         }
         await this.prisma.webhookEvent.create({
             data: {
+                eventId: event.id,
                 stripeEventId: event.id,
                 type: event.type,
-                payload: event,
+                data: JSON.parse(JSON.stringify(event)),
                 processedAt: new Date(),
             },
         });
@@ -70,7 +71,7 @@ let WebhookController = WebhookController_1 = class WebhookController {
                     await this.handleSubscriptionDeleted(event);
                     break;
                 case 'customer.subscription.trial_will_end':
-                    await this.handleTrialWillEnd(event);
+                    this.handleTrialWillEnd(event);
                     break;
                 case 'invoice.payment_succeeded':
                     await this.handleInvoicePaymentSucceeded(event);
@@ -91,10 +92,10 @@ let WebhookController = WebhookController_1 = class WebhookController {
                     await this.handlePaymentMethodDetached(event);
                     break;
                 case 'charge.dispute.created':
-                    await this.handleDisputeCreated(event);
+                    this.handleDisputeCreated(event);
                     break;
                 case 'charge.dispute.closed':
-                    await this.handleDisputeClosed(event);
+                    this.handleDisputeClosed(event);
                     break;
                 default:
                     this.logger.log(`Unhandled event type: ${event.type}`);
@@ -105,12 +106,13 @@ let WebhookController = WebhookController_1 = class WebhookController {
             });
         }
         catch (error) {
-            this.logger.error(`Error processing webhook event ${event.id}: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Error processing webhook event ${event.id}: ${errorMessage}`);
             await this.prisma.webhookEvent.updateMany({
                 where: { stripeEventId: event.id },
                 data: {
                     status: 'failed',
-                    error: error.message,
+                    error: errorMessage,
                 },
             });
         }
@@ -118,21 +120,25 @@ let WebhookController = WebhookController_1 = class WebhookController {
     }
     async handleSubscriptionCreated(event) {
         const subscription = event.data.object;
-        const userSub = await this.prisma.userSubscription.findFirst({
-            where: { stripeCustomerId: subscription.customer },
+        const customerId = typeof subscription.customer === 'string'
+            ? subscription.customer
+            : subscription.customer?.id;
+        const userSub = await this.prisma.subscription.findFirst({
+            where: { stripeCustomerId: customerId },
         });
         if (!userSub) {
-            this.logger.error(`No user found for customer ${subscription.customer}`);
+            this.logger.error(`No user found for customer ${customerId}`);
             return;
         }
-        await this.prisma.userSubscription.update({
+        const subscriptionData = subscription;
+        await this.prisma.subscription.update({
             where: { id: userSub.id },
             data: {
                 stripeSubscriptionId: subscription.id,
                 status: this.mapStripeStatus(subscription.status),
-                currentPeriodStart: new Date(subscription.current_period_start * 1000),
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                currentPeriodStart: new Date(subscriptionData.current_period_start * 1000),
+                currentPeriodEnd: new Date(subscriptionData.current_period_end * 1000),
+                cancelAtPeriodEnd: subscriptionData.cancel_at_period_end,
                 planId: subscription.items.data[0]?.price?.id,
             },
         });
@@ -140,94 +146,104 @@ let WebhookController = WebhookController_1 = class WebhookController {
     }
     async handleSubscriptionUpdated(event) {
         const subscription = event.data.object;
-        const userSub = await this.prisma.userSubscription.findFirst({
+        const userSub = await this.prisma.subscription.findFirst({
             where: { stripeSubscriptionId: subscription.id },
         });
         if (!userSub) {
             this.logger.error(`No subscription found for ${subscription.id}`);
             return;
         }
-        const tier = this.getTierFromPriceId(subscription.items.data[0]?.price?.id);
-        await this.prisma.userSubscription.update({
+        const priceId = subscription.items.data[0]?.price?.id ?? '';
+        const tier = this.getTierFromPriceId(priceId);
+        const subscriptionData = subscription;
+        await this.prisma.subscription.update({
             where: { id: userSub.id },
             data: {
                 subscriptionTier: tier,
                 status: this.mapStripeStatus(subscription.status),
-                currentPeriodStart: new Date(subscription.current_period_start * 1000),
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-                cancelAtPeriodEnd: subscription.cancel_at_period_end,
-                planId: subscription.items.data[0]?.price?.id,
+                currentPeriodStart: new Date(subscriptionData.current_period_start * 1000),
+                currentPeriodEnd: new Date(subscriptionData.current_period_end * 1000),
+                cancelAtPeriodEnd: subscriptionData.cancel_at_period_end,
+                planId: priceId,
             },
         });
         this.logger.log(`Subscription updated for user ${userSub.userId}`);
     }
     async handleSubscriptionDeleted(event) {
         const subscription = event.data.object;
-        const userSub = await this.prisma.userSubscription.findFirst({
+        const userSub = await this.prisma.subscription.findFirst({
             where: { stripeSubscriptionId: subscription.id },
         });
         if (!userSub) {
             this.logger.error(`No subscription found for ${subscription.id}`);
             return;
         }
-        await this.prisma.userSubscription.update({
+        await this.prisma.subscription.update({
             where: { id: userSub.id },
             data: {
-                status: client_1.SubscriptionStatus.CANCELED,
+                status: client_1.SubscriptionStatus.CANCELLED,
                 subscriptionTier: client_1.SubscriptionTier.DISCOVER,
                 cancelledAt: new Date(),
             },
         });
         this.logger.log(`Subscription cancelled for user ${userSub.userId}`);
     }
-    async handleTrialWillEnd(event) {
+    handleTrialWillEnd(event) {
         const subscription = event.data.object;
         this.logger.log(`Trial ending soon for subscription ${subscription.id}`);
     }
     async handleInvoicePaymentSucceeded(event) {
         const invoice = event.data.object;
-        const userSub = await this.prisma.userSubscription.findFirst({
-            where: { stripeCustomerId: invoice.customer },
+        const customerId = typeof invoice.customer === 'string'
+            ? invoice.customer
+            : invoice.customer?.id;
+        const userSub = await this.prisma.subscription.findFirst({
+            where: { stripeCustomerId: customerId },
         });
         if (!userSub) {
-            this.logger.error(`No user found for customer ${invoice.customer}`);
+            this.logger.error(`No user found for customer ${customerId}`);
             return;
         }
         await this.prisma.billingHistory.create({
             data: {
                 userId: userSub.userId,
                 stripeInvoiceId: invoice.id,
-                amount: invoice.amount_paid,
-                currency: invoice.currency,
-                status: client_1.InvoiceStatus.paid,
-                description: invoice.description || `Subscription payment`,
-                periodStart: new Date(invoice.period_start * 1000),
-                periodEnd: new Date(invoice.period_end * 1000),
-                invoiceUrl: invoice.hosted_invoice_url,
-                pdfUrl: invoice.invoice_pdf,
+                type: 'subscription_payment',
+                amount: invoice.amount_paid ?? 0,
+                currency: invoice.currency ?? 'usd',
+                status: client_1.InvoiceStatus.PAID,
+                description: invoice.description ?? 'Subscription payment',
+                periodStart: new Date((invoice.period_start ?? 0) * 1000),
+                periodEnd: new Date((invoice.period_end ?? 0) * 1000),
+                invoiceUrl: invoice.hosted_invoice_url ?? undefined,
+                pdfUrl: invoice.invoice_pdf ?? undefined,
             },
         });
         this.logger.log(`Payment succeeded for user ${userSub.userId}`);
     }
     async handleInvoicePaymentFailed(event) {
         const invoice = event.data.object;
-        const userSub = await this.prisma.userSubscription.findFirst({
-            where: { stripeCustomerId: invoice.customer },
+        const customerId = typeof invoice.customer === 'string'
+            ? invoice.customer
+            : invoice.customer?.id;
+        const userSub = await this.prisma.subscription.findFirst({
+            where: { stripeCustomerId: customerId },
         });
         if (!userSub) {
-            this.logger.error(`No user found for customer ${invoice.customer}`);
+            this.logger.error(`No user found for customer ${customerId}`);
             return;
         }
         await this.prisma.billingHistory.create({
             data: {
                 userId: userSub.userId,
                 stripeInvoiceId: invoice.id,
-                amount: invoice.amount_due,
-                currency: invoice.currency,
-                status: client_1.InvoiceStatus.uncollectible,
-                description: `Payment failed - ${invoice.description || 'Subscription payment'}`,
-                periodStart: new Date(invoice.period_start * 1000),
-                periodEnd: new Date(invoice.period_end * 1000),
+                type: 'subscription_payment',
+                amount: invoice.amount_due ?? 0,
+                currency: invoice.currency ?? 'usd',
+                status: client_1.InvoiceStatus.UNCOLLECTIBLE,
+                description: `Payment failed - ${invoice.description ?? 'Subscription payment'}`,
+                periodStart: new Date((invoice.period_start ?? 0) * 1000),
+                periodEnd: new Date((invoice.period_end ?? 0) * 1000),
             },
         });
         this.logger.log(`Payment failed for user ${userSub.userId}`);
@@ -237,7 +253,7 @@ let WebhookController = WebhookController_1 = class WebhookController {
         await this.prisma.paymentIntent.updateMany({
             where: { stripePaymentIntentId: paymentIntent.id },
             data: {
-                status: 'succeeded',
+                status: 'SUCCEEDED',
                 updatedAt: new Date(),
             },
         });
@@ -248,7 +264,7 @@ let WebhookController = WebhookController_1 = class WebhookController {
         await this.prisma.paymentIntent.updateMany({
             where: { stripePaymentIntentId: paymentIntent.id },
             data: {
-                status: 'failed',
+                status: 'FAILED',
                 updatedAt: new Date(),
             },
         });
@@ -256,11 +272,14 @@ let WebhookController = WebhookController_1 = class WebhookController {
     }
     async handlePaymentMethodAttached(event) {
         const paymentMethod = event.data.object;
-        const userSub = await this.prisma.userSubscription.findFirst({
-            where: { stripeCustomerId: paymentMethod.customer },
+        const customerId = typeof paymentMethod.customer === 'string'
+            ? paymentMethod.customer
+            : paymentMethod.customer?.id;
+        const userSub = await this.prisma.subscription.findFirst({
+            where: { stripeCustomerId: customerId },
         });
         if (!userSub) {
-            this.logger.error(`No user found for customer ${paymentMethod.customer}`);
+            this.logger.error(`No user found for customer ${customerId}`);
             return;
         }
         await this.prisma.paymentMethod.create({
@@ -268,10 +287,10 @@ let WebhookController = WebhookController_1 = class WebhookController {
                 userId: userSub.userId,
                 stripePaymentMethodId: paymentMethod.id,
                 type: paymentMethod.type,
-                brand: paymentMethod.card?.brand,
-                last4: paymentMethod.card?.last4,
-                expiryMonth: paymentMethod.card?.exp_month,
-                expiryYear: paymentMethod.card?.exp_year,
+                brand: paymentMethod.card?.brand ?? undefined,
+                last4: paymentMethod.card?.last4 ?? undefined,
+                expiryMonth: paymentMethod.card?.exp_month ?? undefined,
+                expiryYear: paymentMethod.card?.exp_year ?? undefined,
                 isDefault: false,
             },
         });
@@ -284,34 +303,35 @@ let WebhookController = WebhookController_1 = class WebhookController {
         });
         this.logger.log(`Payment method detached: ${paymentMethod.id}`);
     }
-    async handleDisputeCreated(event) {
+    handleDisputeCreated(event) {
         const dispute = event.data.object;
-        this.logger.warn(`Dispute created: ${dispute.id} for charge ${dispute.charge}`);
+        const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id;
+        this.logger.warn(`Dispute created: ${dispute.id} for charge ${chargeId}`);
     }
-    async handleDisputeClosed(event) {
+    handleDisputeClosed(event) {
         const dispute = event.data.object;
         this.logger.log(`Dispute closed: ${dispute.id} - Status: ${dispute.status}`);
     }
     mapStripeStatus(stripeStatus) {
         const statusMap = {
-            'active': client_1.SubscriptionStatus.ACTIVE,
-            'past_due': client_1.SubscriptionStatus.PAST_DUE,
-            'canceled': client_1.SubscriptionStatus.CANCELED,
-            'incomplete': client_1.SubscriptionStatus.INCOMPLETE,
-            'incomplete_expired': client_1.SubscriptionStatus.EXPIRED,
-            'trialing': client_1.SubscriptionStatus.TRIALING,
-            'unpaid': client_1.SubscriptionStatus.PAST_DUE,
+            active: client_1.SubscriptionStatus.ACTIVE,
+            canceled: client_1.SubscriptionStatus.CANCELLED,
+            incomplete: client_1.SubscriptionStatus.PENDING,
+            incomplete_expired: client_1.SubscriptionStatus.EXPIRED,
+            trialing: client_1.SubscriptionStatus.ACTIVE,
+            unpaid: client_1.SubscriptionStatus.BILLING_RETRY,
+            past_due: client_1.SubscriptionStatus.BILLING_RETRY,
         };
-        return statusMap[stripeStatus] || client_1.SubscriptionStatus.INACTIVE;
+        return statusMap[stripeStatus] || client_1.SubscriptionStatus.PENDING;
     }
     getTierFromPriceId(priceId) {
         const priceToTierMap = {
-            'price_discover_monthly': client_1.SubscriptionTier.DISCOVER,
-            'price_discover_yearly': client_1.SubscriptionTier.DISCOVER,
-            'price_connect_monthly': client_1.SubscriptionTier.CONNECT,
-            'price_connect_yearly': client_1.SubscriptionTier.CONNECT,
-            'price_community_monthly': client_1.SubscriptionTier.COMMUNITY,
-            'price_community_yearly': client_1.SubscriptionTier.COMMUNITY,
+            price_discover_monthly: client_1.SubscriptionTier.DISCOVER,
+            price_discover_yearly: client_1.SubscriptionTier.DISCOVER,
+            price_connect_monthly: client_1.SubscriptionTier.CONNECT,
+            price_connect_yearly: client_1.SubscriptionTier.CONNECT,
+            price_community_monthly: client_1.SubscriptionTier.COMMUNITY,
+            price_community_yearly: client_1.SubscriptionTier.COMMUNITY,
         };
         return priceToTierMap[priceId] || client_1.SubscriptionTier.DISCOVER;
     }

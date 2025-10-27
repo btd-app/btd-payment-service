@@ -17,10 +17,9 @@ exports.RedisService = void 0;
 const common_1 = require("@nestjs/common");
 const ioredis_1 = require("ioredis");
 let RedisService = RedisService_1 = class RedisService {
-    redis;
-    logger = new common_1.Logger(RedisService_1.name);
     constructor(redis) {
         this.redis = redis;
+        this.logger = new common_1.Logger(RedisService_1.name);
     }
     async publishPaymentEvent(event) {
         try {
@@ -33,7 +32,8 @@ let RedisService = RedisService_1 = class RedisService {
             this.logger.debug(`Published event to ${channel}: ${event.type}`);
         }
         catch (error) {
-            this.logger.error(`Failed to publish event: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to publish event: ${errorMessage}`);
             throw error;
         }
     }
@@ -108,7 +108,8 @@ let RedisService = RedisService_1 = class RedisService {
             return data ? JSON.parse(data) : null;
         }
         catch (error) {
-            this.logger.error(`Failed to get cached subscription: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to get cached subscription: ${errorMessage}`);
             return null;
         }
     }
@@ -118,7 +119,8 @@ let RedisService = RedisService_1 = class RedisService {
             await this.redis.setex(key, ttl, JSON.stringify(subscriptionData));
         }
         catch (error) {
-            this.logger.error(`Failed to cache subscription: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to cache subscription: ${errorMessage}`);
         }
     }
     async invalidateSubscriptionCache(userId) {
@@ -127,7 +129,8 @@ let RedisService = RedisService_1 = class RedisService {
             await this.redis.del(key);
         }
         catch (error) {
-            this.logger.error(`Failed to invalidate subscription cache: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to invalidate subscription cache: ${errorMessage}`);
         }
     }
 };

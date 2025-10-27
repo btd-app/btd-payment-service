@@ -14,11 +14,10 @@ const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const jwt = require("jsonwebtoken");
 let AuthGuard = class AuthGuard {
-    configService;
     constructor(configService) {
         this.configService = configService;
     }
-    async canActivate(context) {
+    canActivate(context) {
         const request = context.switchToHttp().getRequest();
         const token = this.extractTokenFromHeader(request);
         if (!token) {
@@ -33,7 +32,7 @@ let AuthGuard = class AuthGuard {
             };
             return true;
         }
-        catch (error) {
+        catch (_error) {
             throw new common_1.UnauthorizedException('Invalid token');
         }
     }

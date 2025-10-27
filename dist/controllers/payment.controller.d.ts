@@ -10,7 +10,7 @@ interface AuthenticatedRequest extends Request {
 export declare class PaymentController {
     private readonly stripeService;
     constructor(stripeService: StripeService);
-    getPlans(): Promise<SubscriptionPlanDto[]>;
+    getPlans(): SubscriptionPlanDto[];
     createPaymentIntent(dto: CreatePaymentIntentDto, req: AuthenticatedRequest): Promise<PaymentIntentResponseDto>;
     createSetupIntent(dto: CreateSetupIntentDto, req: AuthenticatedRequest): Promise<SetupIntentResponseDto>;
     getBillingHistory(req: AuthenticatedRequest): Promise<BillingHistoryDto[]>;

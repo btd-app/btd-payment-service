@@ -3,6 +3,6 @@ import { ConfigService } from '@nestjs/config';
 export declare class AuthGuard implements CanActivate {
     private readonly configService;
     constructor(configService: ConfigService);
-    canActivate(context: ExecutionContext): Promise<boolean>;
+    canActivate(context: ExecutionContext): boolean;
     private extractTokenFromHeader;
 }

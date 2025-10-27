@@ -11,7 +11,9 @@ exports.CorrelationIdMiddleware = void 0;
 const common_1 = require("@nestjs/common");
 const uuid_1 = require("uuid");
 let CorrelationIdMiddleware = CorrelationIdMiddleware_1 = class CorrelationIdMiddleware {
-    logger = new common_1.Logger(CorrelationIdMiddleware_1.name);
+    constructor() {
+        this.logger = new common_1.Logger(CorrelationIdMiddleware_1.name);
+    }
     use(req, res, next) {
         const correlationId = req.headers['x-correlation-id'] || (0, uuid_1.v4)();
         const callingService = req.headers['x-calling-service'] || 'unknown';

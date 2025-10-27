@@ -185,7 +185,12 @@ export class StripeService {
     userId: string,
     planId: string,
     paymentMethodId: string,
-  ) {
+  ): Promise<{
+    subscriptionId: string;
+    clientSecret: string | null;
+    status: SubscriptionStatus;
+    currentPeriodEnd: Date;
+  }> {
     try {
       const plan = this.plans[planId];
       if (!plan) {
@@ -270,7 +275,7 @@ export class StripeService {
       return {
         subscriptionId: stripeSubscription.id,
         clientSecret,
-        status: stripeSubscription.status,
+        status: stripeSubscription.status.toUpperCase() as SubscriptionStatus,
         currentPeriodEnd: new Date(subscriptionData.current_period_end * 1000),
       };
     } catch (error) {

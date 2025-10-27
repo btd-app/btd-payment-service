@@ -13,31 +13,27 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentGrpcController = void 0;
 const common_1 = require("@nestjs/common");
 const microservices_1 = require("@nestjs/microservices");
-const grpc_js_1 = require("@grpc/grpc-js");
 const rxjs_1 = require("rxjs");
 const subscription_service_1 = require("../services/subscription.service");
 const stripe_service_1 = require("../services/stripe.service");
 const prisma_service_1 = require("../prisma/prisma.service");
 let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcController {
-    subscriptionService;
-    stripeService;
-    prisma;
-    logger = new common_1.Logger(PaymentGrpcController_1.name);
-    eventStream = new rxjs_1.Subject();
-    streamCounter = 0;
     constructor(subscriptionService, stripeService, prisma) {
         this.subscriptionService = subscriptionService;
         this.stripeService = stripeService;
         this.prisma = prisma;
+        this.logger = new common_1.Logger(PaymentGrpcController_1.name);
+        this.eventStream = new rxjs_1.Subject();
+        this.streamCounter = 0;
     }
-    async createSubscription(data, metadata, call) {
+    async createSubscription(data) {
         this.logger.debug(`[gRPC] Creating subscription for user ${data.userId} with plan ${data.planId}`);
         try {
             const userEmail = data.userEmail || `user-${data.userId}@example.com`;
             const userName = data.userName || undefined;
             await this.stripeService.createOrGetCustomer(data.userId, userEmail, userName);
             const result = await this.stripeService.createSubscription(data.userId, data.planId, data.paymentMethodId || '');
-            const dbSubscription = await this.prisma.userSubscription.findUnique({
+            const dbSubscription = await this.prisma.subscription.findUnique({
                 where: { userId: data.userId },
             });
             const subscription = {
@@ -48,7 +44,8 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
                 amount: 0,
                 currency: 'usd',
                 interval: 'month',
-                currentPeriodStart: dbSubscription?.currentPeriodStart?.toISOString() || new Date().toISOString(),
+                currentPeriodStart: dbSubscription?.currentPeriodStart?.toISOString() ||
+                    new Date().toISOString(),
                 currentPeriodEnd: result.currentPeriodEnd.toISOString(),
                 createdAt: new Date().toISOString(),
                 metadata: data.metadata,
@@ -65,52 +62,58 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
             };
         }
         catch (error) {
-            this.logger.error(`Failed to create subscription: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to create subscription: ${errorMessage}`);
             throw error;
         }
     }
-    async updateSubscription(data, metadata) {
+    async updateSubscription(data) {
         this.logger.debug(`[gRPC] Updating subscription ${data.subscriptionId}`);
         try {
-            const updatedStripeSubscription = await this.stripeService.updateSubscription(data.userId, data.newPlanId, data.cancelAtPeriodEnd);
-            const dbSubscription = await this.prisma.userSubscription.findUnique({
+            await this.stripeService.updateSubscription(data.userId, data.newPlanId, data.cancelAtPeriodEnd ?? false);
+            const dbSubscription = await this.prisma.subscription.findUnique({
                 where: { userId: data.userId },
             });
             if (!dbSubscription) {
                 throw new Error('Subscription not found');
             }
+            const subscription = {
+                id: dbSubscription.stripeSubscriptionId || data.subscriptionId,
+                userId: data.userId,
+                planId: dbSubscription.planId || data.newPlanId,
+                status: dbSubscription.status.toLowerCase(),
+                amount: 0,
+                currency: 'usd',
+                interval: 'month',
+                currentPeriodStart: dbSubscription.currentPeriodStart?.toISOString() ||
+                    new Date().toISOString(),
+                currentPeriodEnd: dbSubscription.currentPeriodEnd?.toISOString() ||
+                    new Date().toISOString(),
+                createdAt: dbSubscription.createdAt.toISOString(),
+            };
             return {
-                subscription: {
-                    id: dbSubscription.stripeSubscriptionId || data.subscriptionId,
-                    userId: data.userId,
-                    planId: dbSubscription.planId || data.newPlanId,
-                    status: dbSubscription.status.toLowerCase(),
-                    amount: 0,
-                    currency: 'usd',
-                    interval: 'month',
-                    currentPeriodStart: dbSubscription.currentPeriodStart?.toISOString() || new Date().toISOString(),
-                    currentPeriodEnd: dbSubscription.currentPeriodEnd?.toISOString() || new Date().toISOString(),
-                    createdAt: dbSubscription.createdAt.toISOString(),
-                },
+                subscription,
                 prorationAmount: 0,
             };
         }
         catch (error) {
-            this.logger.error(`Failed to update subscription: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to update subscription: ${errorMessage}`);
             throw error;
         }
     }
-    async cancelSubscription(data, metadata) {
+    async cancelSubscription(data) {
         this.logger.debug(`[gRPC] Cancelling subscription ${data.subscriptionId} for user ${data.userId}`);
         try {
             await this.stripeService.cancelSubscription(data.userId, data.cancelImmediately);
-            const dbSubscription = await this.prisma.userSubscription.findUnique({
+            const dbSubscription = await this.prisma.subscription.findUnique({
                 where: { userId: data.userId },
             });
             const now = new Date().toISOString();
             const endsAt = data.cancelImmediately
                 ? now
-                : dbSubscription?.currentPeriodEnd?.toISOString() || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+                : dbSubscription?.currentPeriodEnd?.toISOString() ||
+                    new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
             this.emitPaymentEvent('subscription_cancelled', data.userId, {
                 subscriptionId: data.subscriptionId,
                 reason: data.cancellationReason || 'user_requested',
@@ -122,42 +125,46 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
             };
         }
         catch (error) {
-            this.logger.error(`Failed to cancel subscription: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to cancel subscription: ${errorMessage}`);
             throw error;
         }
     }
-    async getSubscription(data, metadata) {
+    async getSubscription(data) {
         this.logger.debug(`[gRPC] Getting subscription ${data.subscriptionId}`);
         try {
-            const dbSubscription = await this.prisma.userSubscription.findUnique({
+            const dbSubscription = await this.prisma.subscription.findUnique({
                 where: { userId: data.userId },
             });
             if (!dbSubscription) {
                 throw new Error('Subscription not found');
             }
             const features = this.subscriptionService.getSubscriptionFeatures(dbSubscription.subscriptionTier);
-            return {
-                subscription: {
-                    id: dbSubscription.stripeSubscriptionId || data.subscriptionId,
-                    userId: data.userId,
-                    planId: dbSubscription.planId || dbSubscription.subscriptionTier.toLowerCase(),
-                    status: dbSubscription.status.toLowerCase(),
-                    amount: this.getPlanAmount(dbSubscription.subscriptionTier),
-                    currency: 'usd',
-                    interval: 'month',
-                    currentPeriodStart: dbSubscription.currentPeriodStart?.toISOString() || new Date().toISOString(),
-                    currentPeriodEnd: dbSubscription.currentPeriodEnd?.toISOString() || new Date().toISOString(),
-                    createdAt: dbSubscription.createdAt.toISOString(),
-                    featureFlags: this.extractFeatureFlags(features),
-                },
+            const subscription = {
+                id: dbSubscription.stripeSubscriptionId || data.subscriptionId,
+                userId: data.userId,
+                planId: dbSubscription.planId ||
+                    dbSubscription.subscriptionTier.toLowerCase(),
+                status: dbSubscription.status.toLowerCase(),
+                amount: this.getPlanAmount(dbSubscription.subscriptionTier),
+                currency: 'usd',
+                interval: 'month',
+                currentPeriodStart: dbSubscription.currentPeriodStart?.toISOString() ||
+                    new Date().toISOString(),
+                currentPeriodEnd: dbSubscription.currentPeriodEnd?.toISOString() ||
+                    new Date().toISOString(),
+                createdAt: dbSubscription.createdAt.toISOString(),
+                featureFlags: this.extractFeatureFlags(features),
             };
+            return { subscription };
         }
         catch (error) {
-            this.logger.error(`Failed to get subscription: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to get subscription: ${errorMessage}`);
             throw error;
         }
     }
-    async processPayment(data, metadata, call) {
+    async processPayment(data) {
         this.logger.debug(`[gRPC] Processing payment of ${data.amount} ${data.currency} for user ${data.userId}`);
         try {
             const paymentIntent = await this.stripeService.createPaymentIntent(data.userId, 'one_time_payment', data.paymentMethodId, data.currency);
@@ -167,7 +174,7 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
                     stripePaymentIntentId: paymentIntent.paymentIntentId,
                     amount: data.amount,
                     currency: data.currency,
-                    status: 'processing',
+                    status: 'PENDING',
                     description: data.description,
                     metadata: data.metadata || {},
                 },
@@ -196,16 +203,17 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
             };
         }
         catch (error) {
-            this.logger.error(`Failed to process payment: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to process payment: ${errorMessage}`);
             return {
                 payment: null,
                 clientSecret: null,
                 requiresAction: false,
-                error: error.message,
+                error: errorMessage,
             };
         }
     }
-    async addPaymentMethod(data, metadata) {
+    async addPaymentMethod(data) {
         this.logger.debug(`[gRPC] Adding payment method for user ${data.userId}`);
         try {
             const setupIntent = await this.stripeService.createSetupIntent(data.userId);
@@ -220,13 +228,15 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
                     const paymentMethod = {
                         id: dbPaymentMethod.stripePaymentMethodId,
                         type: dbPaymentMethod.type,
-                        card: dbPaymentMethod.brand ? {
-                            brand: dbPaymentMethod.brand,
-                            last4: dbPaymentMethod.last4 || '****',
-                            expMonth: dbPaymentMethod.expiryMonth || 12,
-                            expYear: dbPaymentMethod.expiryYear || 2025,
-                            funding: 'credit',
-                        } : undefined,
+                        card: dbPaymentMethod.brand
+                            ? {
+                                brand: dbPaymentMethod.brand,
+                                last4: dbPaymentMethod.last4 || '****',
+                                expMonth: dbPaymentMethod.expiryMonth || 12,
+                                expYear: dbPaymentMethod.expiryYear || 2025,
+                                funding: 'credit',
+                            }
+                            : undefined,
                         createdAt: dbPaymentMethod.createdAt.toISOString(),
                         isDefault: dbPaymentMethod.isDefault,
                     };
@@ -248,47 +258,51 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
             };
         }
         catch (error) {
-            this.logger.error(`Failed to add payment method: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to add payment method: ${errorMessage}`);
             return {
                 paymentMethod: null,
                 success: false,
-                error: error.message,
+                error: errorMessage,
             };
         }
     }
-    async getPaymentMethods(data, metadata) {
+    async getPaymentMethods(data) {
         this.logger.debug(`[gRPC] Getting payment methods for user ${data.userId}`);
         try {
             const dbPaymentMethods = await this.stripeService.getPaymentMethods(data.userId);
-            const paymentMethods = dbPaymentMethods.map(pm => ({
+            const paymentMethods = dbPaymentMethods.map((pm) => ({
                 id: pm.stripePaymentMethodId,
                 type: pm.type,
-                card: pm.brand ? {
-                    brand: pm.brand,
-                    last4: pm.last4 || '****',
-                    expMonth: pm.expiryMonth || 12,
-                    expYear: pm.expiryYear || 2025,
-                    funding: 'credit',
-                } : undefined,
+                card: pm.brand
+                    ? {
+                        brand: pm.brand,
+                        last4: pm.last4 || '****',
+                        expMonth: pm.expiryMonth || 12,
+                        expYear: pm.expiryYear || 2025,
+                        funding: 'credit',
+                    }
+                    : undefined,
                 createdAt: pm.createdAt.toISOString(),
                 isDefault: pm.isDefault,
             }));
-            const defaultMethod = paymentMethods.find(pm => pm.isDefault);
+            const defaultMethod = paymentMethods.find((pm) => pm.isDefault);
             return {
                 paymentMethods,
                 defaultPaymentMethodId: defaultMethod?.id || null,
             };
         }
         catch (error) {
-            this.logger.error(`Failed to get payment methods: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to get payment methods: ${errorMessage}`);
             throw error;
         }
     }
-    async getPricingPlans(data, metadata) {
+    getPricingPlans(data) {
         this.logger.debug(`[gRPC] Getting pricing plans for currency ${data.currency || 'usd'}`);
         try {
             const stripePlans = this.stripeService.getAvailablePlans();
-            const plans = Object.values(stripePlans).map(plan => {
+            const plans = Object.values(stripePlans).map((plan) => {
                 const features = this.subscriptionService.getSubscriptionFeatures(plan.tier);
                 return {
                     id: plan.id,
@@ -317,70 +331,81 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
             };
         }
         catch (error) {
-            this.logger.error(`Failed to get pricing plans: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to get pricing plans: ${errorMessage}`);
             throw error;
         }
     }
-    async getInvoices(data, metadata) {
+    async getInvoices(data) {
         this.logger.debug(`[gRPC] Getting invoices for user ${data.userId}`);
         try {
             const billingHistory = await this.stripeService.getBillingHistory(data.userId);
-            const invoices = billingHistory.map(bill => ({
-                id: bill.stripeInvoiceId,
-                subscriptionId: bill.subscriptionId || null,
-                amountDue: bill.amount / 100,
-                amountPaid: bill.amount / 100,
-                currency: bill.currency,
-                status: bill.status.toLowerCase(),
-                dueDate: bill.createdAt.toISOString(),
-                periodStart: bill.periodStart.toISOString(),
-                periodEnd: bill.periodEnd.toISOString(),
-                lineItems: [
-                    {
-                        description: bill.description || 'Subscription',
-                        amount: bill.amount / 100,
-                        quantity: 1,
-                    },
-                ],
-                pdfUrl: bill.pdfUrl || null,
-            }));
+            const invoices = billingHistory.map((bill) => {
+                const amountInCents = Number(bill.amount);
+                const amountInDollars = amountInCents / 100;
+                return {
+                    id: bill.stripeInvoiceId,
+                    subscriptionId: null,
+                    amountDue: amountInDollars,
+                    amountPaid: amountInDollars,
+                    currency: bill.currency,
+                    status: bill.status.toLowerCase(),
+                    dueDate: bill.createdAt.toISOString(),
+                    periodStart: bill.periodStart.toISOString(),
+                    periodEnd: bill.periodEnd.toISOString(),
+                    lineItems: [
+                        {
+                            description: bill.description || 'Subscription',
+                            amount: amountInDollars,
+                            quantity: 1,
+                        },
+                    ],
+                    pdfUrl: bill.pdfUrl || null,
+                };
+            });
+            const limit = data.limit || 100;
             return {
-                invoices: invoices.slice(0, data.limit || 100),
-                hasMore: invoices.length > (data.limit || 100),
+                invoices: invoices.slice(0, limit),
+                hasMore: invoices.length > limit,
             };
         }
         catch (error) {
-            this.logger.error(`Failed to get invoices: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to get invoices: ${errorMessage}`);
             throw error;
         }
     }
-    async processStripeWebhook(data, metadata) {
+    async processStripeWebhook(data) {
         this.logger.debug(`[gRPC] Processing Stripe webhook: ${data.eventType}`);
         try {
             let processed = false;
             let message = '';
             switch (data.eventType) {
                 case 'payment_intent.succeeded':
-                    await this.prisma.paymentIntent.updateMany({
-                        where: { stripePaymentIntentId: data.objectId },
-                        data: { status: 'succeeded' },
-                    });
-                    this.emitPaymentEvent('webhook_payment_succeeded', data.userId, {
-                        eventId: data.eventId,
-                        paymentIntentId: data.objectId,
-                    });
+                    if (data.objectId) {
+                        await this.prisma.paymentIntent.updateMany({
+                            where: { stripePaymentIntentId: data.objectId },
+                            data: { status: 'SUCCEEDED' },
+                        });
+                        this.emitPaymentEvent('webhook_payment_succeeded', data.userId, {
+                            eventId: data.eventId,
+                            paymentIntentId: data.objectId,
+                        });
+                    }
                     processed = true;
                     message = 'Payment intent succeeded';
                     break;
                 case 'payment_intent.payment_failed':
-                    await this.prisma.paymentIntent.updateMany({
-                        where: { stripePaymentIntentId: data.objectId },
-                        data: { status: 'failed' },
-                    });
-                    this.emitPaymentEvent('webhook_payment_failed', data.userId, {
-                        eventId: data.eventId,
-                        paymentIntentId: data.objectId,
-                    });
+                    if (data.objectId) {
+                        await this.prisma.paymentIntent.updateMany({
+                            where: { stripePaymentIntentId: data.objectId },
+                            data: { status: 'FAILED' },
+                        });
+                        this.emitPaymentEvent('webhook_payment_failed', data.userId, {
+                            eventId: data.eventId,
+                            paymentIntentId: data.objectId,
+                        });
+                    }
                     processed = true;
                     message = 'Payment intent failed';
                     break;
@@ -401,15 +426,16 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
             };
         }
         catch (error) {
-            this.logger.error(`Failed to process webhook: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to process webhook: ${errorMessage}`);
             return {
                 processed: false,
                 message: null,
-                error: error.message,
+                error: errorMessage,
             };
         }
     }
-    async getPaymentHealth(data, metadata) {
+    getPaymentHealth(data) {
         this.logger.debug('[gRPC] Getting payment service health');
         const response = {
             healthy: true,
@@ -428,9 +454,9 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
                 totalTransactions: 15234,
                 successfulTransactions: 14998,
                 failedTransactions: 236,
-                totalRevenue: 250000.50,
+                totalRevenue: 250000.5,
                 activeSubscriptions: 1250,
-                mrr: 18750.00,
+                mrr: 18750.0,
                 transactionsByType: {
                     subscription_creation: 450,
                     subscription_renewal: 800,
@@ -440,7 +466,7 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
         }
         return response;
     }
-    streamPaymentEvents(data, metadata) {
+    streamPaymentEvents(data) {
         this.logger.log(`[gRPC] Starting payment event stream for service ${data.serviceId}`);
         return new rxjs_1.Observable((observer) => {
             const subscription = this.eventStream.subscribe({
@@ -481,17 +507,29 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
     }
     getFeatureFlagsForPlan(planId) {
         const planFeatureMap = {
-            'discover': ['basic_matching'],
-            'connect': ['unlimited_likes', 'see_who_liked_you', 'advanced_filters', 'audio_calls'],
-            'community': ['unlimited_likes', 'see_who_liked_you', 'advanced_filters', 'audio_calls', 'video_calls', 'priority_support'],
+            discover: ['basic_matching'],
+            connect: [
+                'unlimited_likes',
+                'see_who_liked_you',
+                'advanced_filters',
+                'audio_calls',
+            ],
+            community: [
+                'unlimited_likes',
+                'see_who_liked_you',
+                'advanced_filters',
+                'audio_calls',
+                'video_calls',
+                'priority_support',
+            ],
         };
         return planFeatureMap[planId] || planFeatureMap['discover'];
     }
     getPlanAmount(tier) {
         const tierPricing = {
-            'DISCOVER': 0,
-            'CONNECT': 9.99,
-            'COMMUNITY': 19.99,
+            DISCOVER: 0,
+            CONNECT: 9.99,
+            COMMUNITY: 19.99,
         };
         return tierPricing[tier] || 0;
     }
@@ -515,7 +553,8 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
             flags.push('travel_mode');
         if (features.incognitoMode)
             flags.push('incognito_mode');
-        if (features.supportPriority === 'priority' || features.supportPriority === 'vip') {
+        if (features.supportPriority === 'priority' ||
+            features.supportPriority === 'vip') {
             flags.push('priority_support');
         }
         return flags;
@@ -557,28 +596,41 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
         try {
             const subscription = await this.subscriptionService.getUserSubscription(data.userId);
             const features = this.subscriptionService.getSubscriptionFeatures(subscription.subscriptionTier);
-            const subscriptions = [{
-                    id: ('stripeSubscriptionId' in subscription ? subscription.stripeSubscriptionId : null) || `sub_${data.userId}`,
-                    userId: data.userId,
-                    planId: ('planId' in subscription ? subscription.planId : null) || subscription.subscriptionTier.toLowerCase(),
-                    status: subscription.status?.toLowerCase() || 'active',
-                    tier: subscription.subscriptionTier,
-                    currentPeriodStart: subscription.currentPeriodStart?.toISOString() || new Date().toISOString(),
-                    currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() || new Date().toISOString(),
-                    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd || false,
-                    features: this.extractFeatureFlags(features),
-                }];
+            const subscriptionCreatedAt = 'createdAt' in subscription && subscription.createdAt instanceof Date
+                ? subscription.createdAt.toISOString()
+                : new Date().toISOString();
+            const grpcSubscription = {
+                id: ('stripeSubscriptionId' in subscription
+                    ? subscription.stripeSubscriptionId
+                    : null) || `sub_${data.userId}`,
+                userId: data.userId,
+                planId: ('planId' in subscription ? subscription.planId : null) ||
+                    subscription.subscriptionTier.toLowerCase(),
+                status: subscription.status?.toLowerCase() || 'active',
+                tier: subscription.subscriptionTier,
+                amount: this.getPlanAmount(subscription.subscriptionTier),
+                currency: 'usd',
+                interval: 'month',
+                currentPeriodStart: subscription.currentPeriodStart?.toISOString() ||
+                    new Date().toISOString(),
+                currentPeriodEnd: subscription.currentPeriodEnd?.toISOString() ||
+                    new Date().toISOString(),
+                createdAt: subscriptionCreatedAt,
+                cancelAtPeriodEnd: subscription.cancelAtPeriodEnd || false,
+                featureFlags: this.extractFeatureFlags(features),
+            };
             return {
-                subscriptions,
-                hasMore: false
+                subscriptions: [grpcSubscription],
+                hasMore: false,
             };
         }
         catch (error) {
-            this.logger.error(`Failed to get user subscriptions: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to get user subscriptions: ${errorMessage}`);
             return { subscriptions: [], hasMore: false };
         }
     }
-    async refundPayment(data) {
+    refundPayment(data) {
         this.logger.debug(`[gRPC] Processing refund for payment ${data.paymentId}`);
         return { refund: null, success: false, error: 'Not implemented' };
     }
@@ -591,23 +643,25 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
                 take: data.limit || 50,
                 skip: data.offset || 0,
             });
-            const payments = paymentIntents.map(pi => ({
+            const payments = paymentIntents.map((pi) => ({
                 id: pi.stripePaymentIntentId,
                 userId: pi.userId,
-                amount: pi.amount,
+                amount: Number(pi.amount),
                 currency: pi.currency,
                 status: pi.status.toLowerCase(),
                 description: pi.description,
+                paymentMethodId: '',
                 createdAt: pi.createdAt.toISOString(),
                 metadata: pi.metadata || {},
             }));
             return {
                 payments,
-                hasMore: paymentIntents.length === (data.limit || 50)
+                hasMore: paymentIntents.length === (data.limit || 50),
             };
         }
         catch (error) {
-            this.logger.error(`Failed to get payment history: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to get payment history: ${errorMessage}`);
             return { payments: [], hasMore: false };
         }
     }
@@ -617,14 +671,15 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
             await this.stripeService.deletePaymentMethod(data.userId, data.paymentMethodId);
             return {
                 success: true,
-                message: 'Payment method removed successfully'
+                message: 'Payment method removed successfully',
             };
         }
         catch (error) {
-            this.logger.error(`Failed to remove payment method: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to remove payment method: ${errorMessage}`);
             return {
                 success: false,
-                message: error.message
+                message: errorMessage,
             };
         }
     }
@@ -632,39 +687,56 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
         this.logger.debug(`[gRPC] Setting default payment method for user ${data.userId}`);
         try {
             await this.stripeService.setDefaultPaymentMethod(data.userId, data.paymentMethodId);
-            const paymentMethod = await this.prisma.paymentMethod.findUnique({
+            const dbPaymentMethod = await this.prisma.paymentMethod.findUnique({
                 where: { stripePaymentMethodId: data.paymentMethodId },
             });
+            const paymentMethod = dbPaymentMethod
+                ? {
+                    id: dbPaymentMethod.stripePaymentMethodId,
+                    type: dbPaymentMethod.type,
+                    isDefault: true,
+                    last4: dbPaymentMethod.last4,
+                    brand: dbPaymentMethod.brand,
+                    createdAt: dbPaymentMethod.createdAt.toISOString(),
+                }
+                : null;
             return {
                 success: true,
-                paymentMethod: paymentMethod ? {
-                    id: paymentMethod.stripePaymentMethodId,
-                    type: paymentMethod.type,
-                    isDefault: true,
-                    last4: paymentMethod.last4,
-                    brand: paymentMethod.brand,
-                } : null
+                paymentMethod,
             };
         }
         catch (error) {
-            this.logger.error(`Failed to set default payment method: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to set default payment method: ${errorMessage}`);
             return {
                 success: false,
-                paymentMethod: null
+                paymentMethod: null,
             };
         }
     }
-    async getUpcomingInvoice(data) {
+    getUpcomingInvoice(data) {
         this.logger.debug(`[gRPC] Getting upcoming invoice for user ${data.userId}`);
         return { invoice: null, exists: false };
     }
-    async validatePromoCode(data) {
+    validatePromoCode(data) {
         this.logger.debug(`[gRPC] Validating promo code ${data.promoCode}`);
         try {
             const validPromoCodes = {
-                'WELCOME10': { discountType: 'percentage', discountValue: 10, description: '10% off first month' },
-                'SAVE20': { discountType: 'percentage', discountValue: 20, description: '20% off first month' },
-                'FRIEND50': { discountType: 'fixed', discountValue: 50, description: '$5.00 off' },
+                WELCOME10: {
+                    discountType: 'percentage',
+                    discountValue: 10,
+                    description: '10% off first month',
+                },
+                SAVE20: {
+                    discountType: 'percentage',
+                    discountValue: 20,
+                    description: '20% off first month',
+                },
+                FRIEND50: {
+                    discountType: 'fixed',
+                    discountValue: 50,
+                    description: '$5.00 off',
+                },
             };
             const promoCode = validPromoCodes[data.promoCode.toUpperCase()];
             if (!promoCode) {
@@ -675,11 +747,11 @@ let PaymentGrpcController = PaymentGrpcController_1 = class PaymentGrpcControlle
                 discountType: promoCode.discountType,
                 discountValue: promoCode.discountValue,
                 description: promoCode.description,
-                error: null,
             };
         }
         catch (error) {
-            this.logger.error(`Failed to validate promo code: ${error.message}`);
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            this.logger.error(`Failed to validate promo code: ${errorMessage}`);
             return { valid: false, error: 'Failed to validate promo code' };
         }
     }
@@ -688,73 +760,73 @@ exports.PaymentGrpcController = PaymentGrpcController;
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'CreateSubscription'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata, Object]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "createSubscription", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'UpdateSubscription'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "updateSubscription", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'CancelSubscription'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "cancelSubscription", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'GetSubscription'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "getSubscription", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'ProcessPayment'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata, Object]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "processPayment", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'AddPaymentMethod'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "addPaymentMethod", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'GetPaymentMethods'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "getPaymentMethods", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'GetPricingPlans'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Object)
 ], PaymentGrpcController.prototype, "getPricingPlans", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'GetInvoices'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "getInvoices", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'ProcessStripeWebhook'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], PaymentGrpcController.prototype, "processStripeWebhook", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'GetPaymentHealth'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Object)
 ], PaymentGrpcController.prototype, "getPaymentHealth", null);
 __decorate([
     (0, microservices_1.GrpcStreamMethod)('PaymentService', 'StreamPaymentEvents'),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, grpc_js_1.Metadata]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", rxjs_1.Observable)
 ], PaymentGrpcController.prototype, "streamPaymentEvents", null);
 __decorate([
@@ -767,7 +839,7 @@ __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'RefundPayment'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:returntype", Object)
 ], PaymentGrpcController.prototype, "refundPayment", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'GetPaymentHistory'),
@@ -791,13 +863,13 @@ __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'GetUpcomingInvoice'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:returntype", Object)
 ], PaymentGrpcController.prototype, "getUpcomingInvoice", null);
 __decorate([
     (0, microservices_1.GrpcMethod)('PaymentService', 'ValidatePromoCode'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
+    __metadata("design:returntype", Object)
 ], PaymentGrpcController.prototype, "validatePromoCode", null);
 exports.PaymentGrpcController = PaymentGrpcController = PaymentGrpcController_1 = __decorate([
     (0, common_1.Controller)(),

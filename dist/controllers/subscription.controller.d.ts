@@ -24,10 +24,10 @@ export declare class SubscriptionController {
     }>;
     getSubscriptionFeatures(req: AuthenticatedRequest): Promise<SubscriptionFeaturesDto>;
     validateFeatureAccess(dto: ValidateFeatureAccessDto, req: AuthenticatedRequest): Promise<FeatureAccessResponseDto>;
-    getCallUsageStats(req: AuthenticatedRequest): Promise<CallUsageStatsDto>;
+    getCallUsageStats(req: AuthenticatedRequest): CallUsageStatsDto;
     trackFeatureUsage(dto: {
         feature: string;
-        metadata?: any;
+        metadata?: Record<string, unknown>;
     }, req: AuthenticatedRequest): Promise<{
         success: boolean;
     }>;

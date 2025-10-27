@@ -10,9 +10,12 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const throttler_1 = require("@nestjs/throttler");
+const schedule_1 = require("@nestjs/schedule");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const prisma_module_1 = require("./prisma/prisma.module");
+const payment_module_1 = require("./payment/payment.module");
+const subscription_jobs_service_1 = require("./scheduled/subscription-jobs.service");
 const payment_controller_1 = require("./controllers/payment.controller");
 const subscription_controller_1 = require("./controllers/subscription.controller");
 const webhook_controller_1 = require("./controllers/webhook.controller");
@@ -21,6 +24,7 @@ const subscription_service_1 = require("./services/subscription.service");
 const grpc_module_1 = require("./grpc/grpc.module");
 const stripe_config_1 = require("./config/stripe.config");
 const express_1 = require("express");
+const consul_service_registration_1 = require("./consul-service-registration");
 let AppModule = class AppModule {
     configure(consumer) {
         consumer
@@ -37,11 +41,15 @@ exports.AppModule = AppModule = __decorate([
                 load: [stripe_config_1.default],
                 envFilePath: ['.env', '.env.local'],
             }),
-            throttler_1.ThrottlerModule.forRoot([{
+            schedule_1.ScheduleModule.forRoot(),
+            throttler_1.ThrottlerModule.forRoot([
+                {
                     ttl: 60000,
                     limit: 100,
-                }]),
+                },
+            ]),
             prisma_module_1.PrismaModule,
+            payment_module_1.PaymentModule,
             grpc_module_1.GrpcModule,
         ],
         controllers: [
@@ -51,9 +59,11 @@ exports.AppModule = AppModule = __decorate([
             webhook_controller_1.WebhookController,
         ],
         providers: [
+            consul_service_registration_1.ConsulServiceRegistration,
             app_service_1.AppService,
             stripe_service_1.StripeService,
             subscription_service_1.SubscriptionService,
+            subscription_jobs_service_1.SubscriptionJobsService,
         ],
     })
 ], AppModule);

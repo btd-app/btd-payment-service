@@ -10,17 +10,17 @@ export interface SubscriptionPlan {
     tier: 'DISCOVER' | 'CONNECT' | 'COMMUNITY';
 }
 declare const _default: (() => {
-    secretKey: string | undefined;
-    webhookSecret: string | undefined;
-    publishableKey: string | undefined;
+    secretKey: string;
+    webhookSecret: string;
+    publishableKey: string;
     currency: string;
     apiVersion: "2025-07-30.basil";
     webhookEvents: string[];
     plans: Record<string, SubscriptionPlan>;
 }) & import("@nestjs/config").ConfigFactoryKeyHost<{
-    secretKey: string | undefined;
-    webhookSecret: string | undefined;
-    publishableKey: string | undefined;
+    secretKey: string;
+    webhookSecret: string;
+    publishableKey: string;
     currency: string;
     apiVersion: "2025-07-30.basil";
     webhookEvents: string[];

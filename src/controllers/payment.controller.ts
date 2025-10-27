@@ -125,7 +125,12 @@ export class PaymentController {
     @Req() req: AuthenticatedRequest,
   ): Promise<BillingHistoryDto[]> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
-    return this.stripeService.getBillingHistory(userId);
+    const history = await this.stripeService.getBillingHistory(userId);
+    // Convert Prisma Decimal to number for DTO
+    return history.map((record) => ({
+      ...record,
+      amount: Number(record.amount),
+    })) as BillingHistoryDto[];
   }
 
   /**
@@ -142,7 +147,12 @@ export class PaymentController {
     @Req() req: AuthenticatedRequest,
   ): Promise<PaymentMethodDto[]> {
     const userId = req.user?.id || 'test-user'; // TODO: Get from auth
-    return this.stripeService.getPaymentMethods(userId);
+    const methods = await this.stripeService.getPaymentMethods(userId);
+    // Add updatedAt field for DTO (PaymentMethod model doesn't have it)
+    return methods.map((method) => ({
+      ...method,
+      updatedAt: method.createdAt, // Use createdAt as fallback for updatedAt
+    })) as PaymentMethodDto[];
   }
 
   /**

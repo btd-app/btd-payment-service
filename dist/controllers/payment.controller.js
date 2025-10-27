@@ -19,11 +19,10 @@ const stripe_service_1 = require("../services/stripe.service");
 const payment_dto_1 = require("../dto/payment.dto");
 const subscription_dto_1 = require("../dto/subscription.dto");
 let PaymentController = class PaymentController {
-    stripeService;
     constructor(stripeService) {
         this.stripeService = stripeService;
     }
-    async getPlans() {
+    getPlans() {
         return this.stripeService.getAvailablePlans();
     }
     async createPaymentIntent(dto, req) {
@@ -38,11 +37,19 @@ let PaymentController = class PaymentController {
     }
     async getBillingHistory(req) {
         const userId = req.user?.id || 'test-user';
-        return this.stripeService.getBillingHistory(userId);
+        const history = await this.stripeService.getBillingHistory(userId);
+        return history.map((record) => ({
+            ...record,
+            amount: Number(record.amount),
+        }));
     }
     async getPaymentMethods(req) {
         const userId = req.user?.id || 'test-user';
-        return this.stripeService.getPaymentMethods(userId);
+        const methods = await this.stripeService.getPaymentMethods(userId);
+        return methods.map((method) => ({
+            ...method,
+            updatedAt: method.createdAt,
+        }));
     }
     async deletePaymentMethod(paymentMethodId, req) {
         const userId = req.user?.id || 'test-user';
@@ -64,7 +71,7 @@ __decorate([
     }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
-    __metadata("design:returntype", Promise)
+    __metadata("design:returntype", Array)
 ], PaymentController.prototype, "getPlans", null);
 __decorate([
     (0, common_1.Post)('create-payment-intent'),
@@ -127,7 +134,10 @@ __decorate([
     (0, common_1.Delete)('payment-methods/:paymentMethodId'),
     (0, common_1.HttpCode)(common_1.HttpStatus.NO_CONTENT),
     (0, swagger_1.ApiOperation)({ summary: 'Delete a payment method' }),
-    (0, swagger_1.ApiParam)({ name: 'paymentMethodId', description: 'Payment method ID to delete' }),
+    (0, swagger_1.ApiParam)({
+        name: 'paymentMethodId',
+        description: 'Payment method ID to delete',
+    }),
     (0, swagger_1.ApiResponse)({
         status: 204,
         description: 'Payment method deleted successfully',
@@ -143,7 +153,10 @@ __decorate([
     (0, common_1.Post)('payment-methods/:paymentMethodId/set-default'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, swagger_1.ApiOperation)({ summary: 'Set default payment method' }),
-    (0, swagger_1.ApiParam)({ name: 'paymentMethodId', description: 'Payment method ID to set as default' }),
+    (0, swagger_1.ApiParam)({
+        name: 'paymentMethodId',
+        description: 'Payment method ID to set as default',
+    }),
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Default payment method set successfully',

@@ -1,5 +1,6 @@
 import { RawBodyRequest } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import '../types/external';
 import { PrismaService } from '../prisma/prisma.service';
 export declare class WebhookController {
     private readonly prisma;

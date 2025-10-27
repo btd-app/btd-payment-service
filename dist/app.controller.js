@@ -14,7 +14,6 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const app_service_1 = require("./app.service");
 let AppController = class AppController {
-    appService;
     constructor(appService) {
         this.appService = appService;
     }
@@ -27,8 +26,8 @@ let AppController = class AppController {
             timestamp: new Date().toISOString(),
             services: {
                 database: true,
-                stripe: true
-            }
+                stripe: true,
+            },
         };
     }
 };
@@ -37,14 +36,14 @@ __decorate([
     (0, common_1.Get)(),
     (0, swagger_1.ApiOperation)({
         summary: 'Health check',
-        description: 'Basic health check endpoint to verify service is running'
+        description: 'Basic health check endpoint to verify service is running',
     }),
     (0, swagger_1.ApiResponse)({
         status: 200,
         description: 'Service is healthy',
         schema: {
-            example: 'Payment Service is running!'
-        }
+            example: 'Payment Service is running!',
+        },
     }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
@@ -54,7 +53,7 @@ __decorate([
     (0, common_1.Get)('health'),
     (0, swagger_1.ApiOperation)({
         summary: 'Detailed health check',
-        description: 'Check service health including database and Stripe API connectivity'
+        description: 'Check service health including database and Stripe API connectivity',
     }),
     (0, swagger_1.ApiResponse)({
         status: 200,
@@ -65,14 +64,14 @@ __decorate([
                 timestamp: '2025-08-15T10:00:00Z',
                 services: {
                     database: true,
-                    stripe: true
-                }
-            }
-        }
+                    stripe: true,
+                },
+            },
+        },
     }),
     (0, swagger_1.ApiResponse)({
         status: 503,
-        description: 'Service or dependencies are unhealthy'
+        description: 'Service or dependencies are unhealthy',
     }),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),

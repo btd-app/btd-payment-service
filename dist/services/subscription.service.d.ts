@@ -1,3 +1,4 @@
+import '../types/external';
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriptionTier } from '@prisma/client';
 export interface SubscriptionFeatures {
@@ -43,20 +44,26 @@ export declare class SubscriptionService {
     private readonly logger;
     constructor(prisma: PrismaService);
     getUserSubscription(userId: string): Promise<{
+        status: import(".prisma/client").$Enums.SubscriptionStatus;
         id: string;
+        createdAt: Date;
         userId: string;
-        stripeSubscriptionId: string | null;
         subscriptionTier: import(".prisma/client").$Enums.SubscriptionTier;
         stripeCustomerId: string | null;
-        status: import(".prisma/client").$Enums.SubscriptionStatus;
+        stripeSubscriptionId: string | null;
+        planId: string | null;
+        appleProductId: string | null;
+        appleTransactionId: string | null;
+        appleOriginalTransactionId: string | null;
         currentPeriodStart: Date;
         currentPeriodEnd: Date;
-        cancelAtPeriodEnd: boolean;
         cancelledAt: Date | null;
-        planId: string | null;
+        lastRenewedAt: Date | null;
         trialEnd: Date | null;
-        metadata: import("@prisma/client/runtime/library").JsonValue | null;
-        createdAt: Date;
+        autoRenew: boolean;
+        cancelAtPeriodEnd: boolean;
+        isTrial: boolean;
+        isIntroOffer: boolean;
         updatedAt: Date;
     } | {
         userId: string;
@@ -81,37 +88,22 @@ export declare class SubscriptionService {
         allowed: boolean;
         reason?: string;
     }>;
-    getMonthlyCallUsage(userId: string): Promise<{
+    getMonthlyCallUsage(..._args: unknown[]): {
         totalCalls: number;
         totalMinutes: number;
         videoCalls: number;
         audioCalls: number;
-    }>;
-    updateCallUsage(userId: string, callType: 'audio' | 'video', durationMinutes: number): Promise<void>;
+    };
+    updateCallUsage(..._args: unknown[]): void;
     canScheduleCalls(userId: string): Promise<boolean>;
     getMaxVideoQuality(userId: string): Promise<'sd' | 'hd' | 'fhd'>;
-    trackFeatureUsage(userId: string, feature: string, metadata?: any): Promise<void>;
+    trackFeatureUsage(userId: string, feature: string, metadata?: Record<string, unknown>): Promise<void>;
     getTierLevel(tier: SubscriptionTier): number;
     hasTierAccess(userId: string, requiredTier: SubscriptionTier): Promise<boolean>;
-    getCallUsageStats(userId: string): Promise<{
-        month: number;
-        year: number;
-        id: string;
-        userId: string;
-        createdAt: Date;
-        updatedAt: Date;
+    getCallUsageStats(..._args: unknown[]): {
         totalCalls: number;
         totalMinutes: number;
         videoCalls: number;
         audioCalls: number;
-        avgCallDuration: number;
-        callsInitiated: number;
-        callsReceived: number;
-        lastCallAt: Date | null;
-    } | {
-        totalCalls: number;
-        totalMinutes: number;
-        videoCalls: number;
-        audioCalls: number;
-    }>;
+    };
 }

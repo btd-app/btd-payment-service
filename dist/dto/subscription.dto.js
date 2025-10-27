@@ -14,9 +14,6 @@ const class_validator_1 = require("class-validator");
 const swagger_1 = require("@nestjs/swagger");
 const client_1 = require("@prisma/client");
 class CreateSubscriptionDto {
-    planId;
-    paymentMethodId;
-    customerId;
 }
 exports.CreateSubscriptionDto = CreateSubscriptionDto;
 __decorate([
@@ -38,8 +35,6 @@ __decorate([
     __metadata("design:type", String)
 ], CreateSubscriptionDto.prototype, "customerId", void 0);
 class UpdateSubscriptionDto {
-    planId;
-    cancelAtPeriodEnd;
 }
 exports.UpdateSubscriptionDto = UpdateSubscriptionDto;
 __decorate([
@@ -55,9 +50,6 @@ __decorate([
     __metadata("design:type", Boolean)
 ], UpdateSubscriptionDto.prototype, "cancelAtPeriodEnd", void 0);
 class CreateCheckoutSessionDto {
-    priceId;
-    successUrl;
-    cancelUrl;
 }
 exports.CreateCheckoutSessionDto = CreateCheckoutSessionDto;
 __decorate([
@@ -79,7 +71,6 @@ __decorate([
     __metadata("design:type", String)
 ], CreateCheckoutSessionDto.prototype, "cancelUrl", void 0);
 class CreatePortalSessionDto {
-    returnUrl;
 }
 exports.CreatePortalSessionDto = CreatePortalSessionDto;
 __decorate([
@@ -89,10 +80,6 @@ __decorate([
     __metadata("design:type", String)
 ], CreatePortalSessionDto.prototype, "returnUrl", void 0);
 class SubscriptionResponseDto {
-    subscriptionId;
-    clientSecret;
-    status;
-    currentPeriodEnd;
 }
 exports.SubscriptionResponseDto = SubscriptionResponseDto;
 __decorate([
@@ -101,7 +88,7 @@ __decorate([
 ], SubscriptionResponseDto.prototype, "subscriptionId", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
-    __metadata("design:type", Object)
+    __metadata("design:type", String)
 ], SubscriptionResponseDto.prototype, "clientSecret", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ enum: client_1.SubscriptionStatus }),
@@ -112,19 +99,6 @@ __decorate([
     __metadata("design:type", Date)
 ], SubscriptionResponseDto.prototype, "currentPeriodEnd", void 0);
 class UserSubscriptionDto {
-    id;
-    userId;
-    subscriptionTier;
-    stripeSubscriptionId;
-    stripeCustomerId;
-    status;
-    currentPeriodStart;
-    currentPeriodEnd;
-    cancelAtPeriodEnd;
-    planId;
-    trialEnd;
-    createdAt;
-    updatedAt;
 }
 exports.UserSubscriptionDto = UserSubscriptionDto;
 __decorate([
@@ -141,11 +115,11 @@ __decorate([
 ], UserSubscriptionDto.prototype, "subscriptionTier", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
-    __metadata("design:type", Object)
+    __metadata("design:type", String)
 ], UserSubscriptionDto.prototype, "stripeSubscriptionId", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
-    __metadata("design:type", Object)
+    __metadata("design:type", String)
 ], UserSubscriptionDto.prototype, "stripeCustomerId", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ enum: client_1.SubscriptionStatus }),
@@ -165,11 +139,11 @@ __decorate([
 ], UserSubscriptionDto.prototype, "cancelAtPeriodEnd", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
-    __metadata("design:type", Object)
+    __metadata("design:type", String)
 ], UserSubscriptionDto.prototype, "planId", void 0);
 __decorate([
     (0, swagger_1.ApiPropertyOptional)(),
-    __metadata("design:type", Object)
+    __metadata("design:type", Date)
 ], UserSubscriptionDto.prototype, "trialEnd", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)(),
@@ -180,15 +154,6 @@ __decorate([
     __metadata("design:type", Date)
 ], UserSubscriptionDto.prototype, "updatedAt", void 0);
 class SubscriptionPlanDto {
-    id;
-    name;
-    description;
-    price;
-    interval;
-    features;
-    stripePriceId;
-    stripeProductId;
-    tier;
 }
 exports.SubscriptionPlanDto = SubscriptionPlanDto;
 __decorate([
@@ -228,7 +193,6 @@ __decorate([
     __metadata("design:type", String)
 ], SubscriptionPlanDto.prototype, "tier", void 0);
 class ValidateFeatureAccessDto {
-    feature;
 }
 exports.ValidateFeatureAccessDto = ValidateFeatureAccessDto;
 __decorate([
@@ -238,9 +202,6 @@ __decorate([
     __metadata("design:type", String)
 ], ValidateFeatureAccessDto.prototype, "feature", void 0);
 class FeatureAccessResponseDto {
-    allowed;
-    reason;
-    upgradeRequired;
 }
 exports.FeatureAccessResponseDto = FeatureAccessResponseDto;
 __decorate([
@@ -256,10 +217,6 @@ __decorate([
     __metadata("design:type", Boolean)
 ], FeatureAccessResponseDto.prototype, "upgradeRequired", void 0);
 class CallUsageStatsDto {
-    totalCalls;
-    totalMinutes;
-    videoCalls;
-    audioCalls;
 }
 exports.CallUsageStatsDto = CallUsageStatsDto;
 __decorate([
@@ -279,42 +236,6 @@ __decorate([
     __metadata("design:type", Number)
 ], CallUsageStatsDto.prototype, "audioCalls", void 0);
 class SubscriptionFeaturesDto {
-    canMakeVideoCalls;
-    canMakeAudioCalls;
-    maxCallDuration;
-    maxVideoQuality;
-    hasVirtualBackgrounds;
-    hasBeautyFilters;
-    hasAREffects;
-    hasCallRecording;
-    hasScreenSharing;
-    hasGroupCalls;
-    maxGroupParticipants;
-    hasCallScheduling;
-    dailyUnmatchedMessages;
-    unlimitedUnmatchedMessages;
-    voiceMessages;
-    videoMessages;
-    messageReactions;
-    readReceipts;
-    dailyLikes;
-    unlimitedLikes;
-    seeWhoLikedYou;
-    advancedFilters;
-    travelMode;
-    incognitoMode;
-    maxPhotos;
-    videoIntro;
-    profileBoostCount;
-    profileAnalytics;
-    groupAudioRooms;
-    forumAccess;
-    virtualEvents;
-    aiCoaching;
-    communityMatchmaking;
-    searchPriority;
-    messagePriority;
-    supportPriority;
 }
 exports.SubscriptionFeaturesDto = SubscriptionFeaturesDto;
 __decorate([

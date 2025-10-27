@@ -18,7 +18,7 @@ async function bootstrap() {
             protoPath: (0, path_1.join)(__dirname, 'proto/payment.proto'),
             url: `0.0.0.0:${grpcPort}`,
             loader: {
-                keepCase: false,
+                keepCase: true,
                 longs: String,
                 enums: String,
                 defaults: true,
@@ -34,7 +34,15 @@ async function bootstrap() {
         origin: process.env.FRONTEND_URL || 'http://localhost:8100',
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Correlation-ID', 'X-Request-ID', 'X-Calling-Service', 'X-Internal-Key'],
+        allowedHeaders: [
+            'Content-Type',
+            'Authorization',
+            'X-Requested-With',
+            'X-Correlation-ID',
+            'X-Request-ID',
+            'X-Calling-Service',
+            'X-Internal-Key',
+        ],
     });
     app.setGlobalPrefix('api/v1');
     if (process.env.NODE_ENV !== 'production') {
@@ -76,5 +84,8 @@ async function bootstrap() {
     console.log(`💳 Payment service running on port ${process.env.PORT ?? 3500}`);
     console.log(`🔗 gRPC server listening on port ${grpcPort}`);
 }
-bootstrap();
+void bootstrap().catch((error) => {
+    console.error('Failed to start payment service:', error);
+    process.exit(1);
+});
 //# sourceMappingURL=main.js.map
