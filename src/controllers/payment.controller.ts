@@ -42,7 +42,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 @ApiTags('Payments')
-@Controller('api/v1/payments')
+@Controller('payments')
 // @UseGuards(AuthGuard) // TODO: Add auth guard
 @ApiBearerAuth()
 export class PaymentController {

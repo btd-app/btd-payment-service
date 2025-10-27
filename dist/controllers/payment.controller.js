@@ -170,7 +170,7 @@ __decorate([
 ], PaymentController.prototype, "setDefaultPaymentMethod", null);
 exports.PaymentController = PaymentController = __decorate([
     (0, swagger_1.ApiTags)('Payments'),
-    (0, common_1.Controller)('api/v1/payments'),
+    (0, common_1.Controller)('payments'),
     (0, swagger_1.ApiBearerAuth)(),
     __metadata("design:paramtypes", [stripe_service_1.StripeService])
 ], PaymentController);

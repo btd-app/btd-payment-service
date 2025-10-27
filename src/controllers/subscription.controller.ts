@@ -50,7 +50,7 @@ interface AuthenticatedRequest extends Request {
 }
 
 @ApiTags('Subscriptions')
-@Controller('api/v1/subscriptions')
+@Controller('subscriptions')
 // @UseGuards(AuthGuard) // TODO: Add auth guard
 @ApiBearerAuth()
 export class SubscriptionController {

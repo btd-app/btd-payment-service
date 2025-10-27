@@ -266,7 +266,7 @@ __decorate([
 ], SubscriptionController.prototype, "trackFeatureUsage", null);
 exports.SubscriptionController = SubscriptionController = __decorate([
     (0, swagger_1.ApiTags)('Subscriptions'),
-    (0, common_1.Controller)('api/v1/subscriptions'),
+    (0, common_1.Controller)('subscriptions'),
     (0, swagger_1.ApiBearerAuth)(),
     __metadata("design:paramtypes", [stripe_service_1.StripeService,
         subscription_service_1.SubscriptionService])
