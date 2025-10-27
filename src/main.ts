@@ -112,3 +112,4 @@ void bootstrap().catch((error) => {
   console.error('Failed to start payment service:', error);
   process.exit(1);
 });
+// Test deployment to development environment - Mon Oct 27 03:09:52 PM PDT 2025
