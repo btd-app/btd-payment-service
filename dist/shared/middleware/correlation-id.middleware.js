@@ -14,10 +14,16 @@ let CorrelationIdMiddleware = CorrelationIdMiddleware_1 = class CorrelationIdMid
     constructor() {
         this.logger = new common_1.Logger(CorrelationIdMiddleware_1.name);
     }
+    extractStringHeader(headerValue) {
+        if (Array.isArray(headerValue)) {
+            return headerValue[0];
+        }
+        return headerValue;
+    }
     use(req, res, next) {
-        const correlationId = req.headers['x-correlation-id'] || (0, uuid_1.v4)();
-        const callingService = req.headers['x-calling-service'] || 'unknown';
-        const requestId = req.headers['x-request-id'];
+        const correlationId = this.extractStringHeader(req.headers['x-correlation-id']) || (0, uuid_1.v4)();
+        const callingService = this.extractStringHeader(req.headers['x-calling-service']) || 'unknown';
+        const requestId = this.extractStringHeader(req.headers['x-request-id']);
         req.correlationId = correlationId;
         req.callingService = callingService;
         req.requestId = requestId;
