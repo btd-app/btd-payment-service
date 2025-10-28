@@ -109,9 +109,8 @@ describe('CorrelationIdMiddleware', () => {
         mockNext,
       );
 
-      // When header is array, middleware receives it as-is (truthy), so uses the array
-      // In real Express, this would be converted to string automatically
-      expect(mockRequest.correlationId).toBe(correlationIds);
+      // Middleware extracts first value from array using extractStringHeader helper
+      expect(mockRequest.correlationId).toBe('correlation-1');
     });
 
     it('should generate UUID when x-correlation-id is empty string', () => {
