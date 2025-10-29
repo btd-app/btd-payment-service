@@ -4,7 +4,7 @@ const core_1 = require("@nestjs/core");
 const app_module_1 = require("./app.module");
 const swagger_1 = require("@nestjs/swagger");
 const microservices_1 = require("@nestjs/microservices");
-const path_1 = require("path");
+const proto_1 = require("@btd/proto");
 const correlation_id_middleware_1 = require("./shared/middleware/correlation-id.middleware");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, {
@@ -14,8 +14,8 @@ async function bootstrap() {
     app.connectMicroservice({
         transport: microservices_1.Transport.GRPC,
         options: {
-            package: 'btd.payment',
-            protoPath: (0, path_1.join)(__dirname, 'proto/payment.proto'),
+            package: ['btd.payment.v1', 'grpc.health.v1'],
+            protoPath: [(0, proto_1.getServiceProtoPath)('payment'), (0, proto_1.getHealthProtoPath)()],
             url: `0.0.0.0:${grpcPort}`,
             loader: {
                 keepCase: true,
@@ -23,6 +23,7 @@ async function bootstrap() {
                 enums: String,
                 defaults: true,
                 oneofs: true,
+                includeDirs: [(0, proto_1.getProtoDir)(), (0, proto_1.getProtoStandardDir)()],
             },
             maxReceiveMessageLength: 8 * 1024 * 1024,
             maxSendMessageLength: 8 * 1024 * 1024,

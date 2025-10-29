@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.GrpcModule = void 0;
 const common_1 = require("@nestjs/common");
 const payment_grpc_controller_1 = require("./payment-grpc.controller");
+const health_controller_1 = require("./health.controller");
 const subscription_service_1 = require("../services/subscription.service");
 const stripe_service_1 = require("../services/stripe.service");
 const prisma_module_1 = require("../prisma/prisma.module");
@@ -19,7 +20,7 @@ exports.GrpcModule = GrpcModule = __decorate([
     (0, common_1.Global)(),
     (0, common_1.Module)({
         imports: [prisma_module_1.PrismaModule],
-        controllers: [payment_grpc_controller_1.PaymentGrpcController],
+        controllers: [payment_grpc_controller_1.PaymentGrpcController, health_controller_1.HealthController],
         providers: [subscription_service_1.SubscriptionService, stripe_service_1.StripeService],
         exports: [],
     })
