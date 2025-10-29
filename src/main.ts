@@ -2,7 +2,12 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { join } from 'path';
+import {
+  getServiceProtoPath,
+  getHealthProtoPath,
+  getProtoDir,
+  getProtoStandardDir,
+} from '@btd/proto';
 import { CorrelationIdMiddleware } from './shared/middleware/correlation-id.middleware';
 
 async function bootstrap() {
@@ -15,8 +20,8 @@ async function bootstrap() {
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.GRPC,
     options: {
-      package: 'btd.payment',
-      protoPath: join(__dirname, 'proto/payment.proto'),
+      package: ['btd.payment.v1', 'grpc.health.v1'],
+      protoPath: [getServiceProtoPath('payment'), getHealthProtoPath()],
       url: `0.0.0.0:${grpcPort}`,
       loader: {
         keepCase: true, // CRITICAL: Keep snake_case field names from proto files
@@ -24,6 +29,7 @@ async function bootstrap() {
         enums: String,
         defaults: true,
         oneofs: true,
+        includeDirs: [getProtoDir(), getProtoStandardDir()],
       },
       maxReceiveMessageLength: 8 * 1024 * 1024, // 8MB
       maxSendMessageLength: 8 * 1024 * 1024, // 8MB

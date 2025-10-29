@@ -4,6 +4,7 @@
  */
 import { Module, Global } from '@nestjs/common';
 import { PaymentGrpcController } from './payment-grpc.controller';
+import { HealthController } from './health.controller';
 import { SubscriptionService } from '../services/subscription.service';
 import { StripeService } from '../services/stripe.service';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -11,7 +12,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 @Global()
 @Module({
   imports: [PrismaModule],
-  controllers: [PaymentGrpcController],
+  controllers: [PaymentGrpcController, HealthController],
   providers: [SubscriptionService, StripeService],
   exports: [],
 })
