@@ -24,7 +24,7 @@ let HealthController = class HealthController {
     constructor() {
         this.serviceStatus = new Map();
         this.serviceStatus.set('', ServingStatus.SERVING);
-        this.serviceStatus.set('btd.payment.v1.PaymentService', ServingStatus.SERVING);
+        this.serviceStatus.set('btd.payment.Payment', ServingStatus.SERVING);
     }
     check(data) {
         const service = data.service || '';

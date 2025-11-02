@@ -28,7 +28,7 @@ export class HealthController {
   constructor() {
     // Set default health status for the service
     this.serviceStatus.set('', ServingStatus.SERVING); // Empty string = overall service health
-    this.serviceStatus.set('btd.payment.v1.PaymentService', ServingStatus.SERVING);
+    this.serviceStatus.set('btd.payment.Payment', ServingStatus.SERVING);
   }
 
   /**
