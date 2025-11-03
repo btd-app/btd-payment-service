@@ -1,16 +1,16 @@
 #!/usr/bin/env groovy
 
 /**
- * BTD Payment Service - Independent Deployment Pipeline
- *
- * This pipeline deploys ONLY btd-payment-service
- * Push to this repo → Build → Deploy → Only payment service affected
+ * BTD Btd Payment Service - Multi-Environment Deployment Pipeline
  *
  * Service: btd-payment-service
- * Container: 10001 at 10.27.27.90 (btd-payment-01)
- * HTTP Port: 3500
- * gRPC Port: 50055
- * Version: 1.0.0
+ * Branch Routing:
+ *   - main → Production (10.27.27.90) with manual approval
+ *   - staging → Staging (10.27.26.190) auto-deploy
+ *   - develop → Development (10.27.26.90) auto-deploy
+ *
+ * HTTP Port: 3011 | gRPC Port: 50062
+ * Complexity: SIMPLE (Prisma only)
  */
 
 pipeline {
@@ -28,9 +28,8 @@ pipeline {
     environment {
         // SERVICE CONFIGURATION
         SERVICE_NAME = 'btd-payment-service'
-        DEPLOY_IP = '10.27.27.90'
-        HTTP_PORT = '3500'
-        GRPC_PORT = '50055'
+        HTTP_PORT = '3011'
+        GRPC_PORT = '50062'
 
         // INFRASTRUCTURE
         ANSIBLE_LXC_HOST = '10.27.27.181'
@@ -40,9 +39,55 @@ pipeline {
         // NODE/NPM CONFIGURATION
         NODE_VERSION = '20.19.5'
         NPM_REGISTRY = 'http://10.27.27.18:4873/'
+
+        // BRANCH-TO-ENVIRONMENT MAPPING
+        BRANCH_TO_ENV = """${
+            env.BRANCH_NAME == 'main' ? 'production' :
+            env.BRANCH_NAME == 'staging' ? 'staging' :
+            env.BRANCH_NAME == 'develop' ? 'development' :
+            'INVALID'
+        }"""
+
+        INVENTORY_FILE = "inventory/${BRANCH_TO_ENV}.yml"
+
+        // Environment-specific IPs
+        DEPLOY_IP = """${
+            env.BRANCH_NAME == 'main' ? '10.27.27.90' :
+            env.BRANCH_NAME == 'staging' ? '10.27.26.190' :
+            env.BRANCH_NAME == 'develop' ? '10.27.26.90' :
+            'INVALID'
+        }"""
     }
 
     stages {
+        stage('Validate Branch') {
+            steps {
+                script {
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "🔍 BRANCH VALIDATION"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "Branch: ${env.BRANCH_NAME}"
+                    echo "Environment: ${BRANCH_TO_ENV}"
+                    echo "Target: ${DEPLOY_IP}:${HTTP_PORT}"
+                    echo "Inventory: ${INVENTORY_FILE}"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                    if (env.BRANCH_TO_ENV == 'INVALID') {
+                        error """
+                        ❌ INVALID BRANCH: ${env.BRANCH_NAME}
+
+                        Only these branches are supported:
+                          • main    → Production (manual approval)
+                          • staging → Staging (auto-deploy)
+                          • develop → Development (auto-deploy)
+
+                        This branch cannot be deployed.
+                        """
+                    }
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -53,15 +98,13 @@ pipeline {
 
         stage('Setup Node.js') {
             steps {
-                script {
-                    sh """
-                        export NVM_DIR="\$HOME/.nvm"
-                        [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
-                        nvm use ${NODE_VERSION} || node --version
-                        node --version
-                        npm --version
-                    """
-                }
+                sh """
+                    export NVM_DIR="\$HOME/.nvm"
+                    [ -s "\$NVM_DIR/nvm.sh" ] && . "\$NVM_DIR/nvm.sh"
+                    nvm use ${NODE_VERSION} || node --version
+                    node --version
+                    npm --version
+                """
             }
         }
 
@@ -100,106 +143,102 @@ pipeline {
             }
             steps {
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    sh 'npm run test'
+                    sh '''
+                        # Set dummy DATABASE_URL for Prisma tests
+                        export DATABASE_URL="postgresql://test_user:test_pass@localhost:5432/test_db"
+                        npm run test
+                    '''
                 }
             }
         }
 
-        stage('Deploy to Container') {
+        stage('Production Approval') {
+            when {
+                expression { env.BRANCH_TO_ENV == 'production' }
+            }
             steps {
                 script {
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-                    echo "🚀 Deploying ${SERVICE_NAME} to ${DEPLOY_IP}"
+                    echo "⚠️  PRODUCTION DEPLOYMENT APPROVAL REQUIRED"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "Service: ${SERVICE_NAME}"
+                    echo "Target: ${DEPLOY_IP} (Production)"
+                    echo "Build: #${BUILD_NUMBER}"
+                    echo "Commit: ${GIT_COMMIT}"
                     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-                    // Restore dist/ directory from stash
+                    input message: "Deploy ${SERVICE_NAME} to PRODUCTION?",
+                          ok: 'Deploy to Production',
+                          submitter: 'authenticated'
+                }
+            }
+        }
+
+        stage('Deploy via Ansible') {
+            steps {
+                script {
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "🚀 Deploying ${SERVICE_NAME} via Ansible LXC"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                    echo "Environment: ${BRANCH_TO_ENV}"
+                    echo "Target IP: ${DEPLOY_IP}"
+                    echo "Inventory: ${INVENTORY_FILE}"
+                    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+                    // Restore build artifacts
                     unstash 'dist-artifact'
 
-                    // Deploy directly from agent to container
                     sh """
-                        # Create deployment directory on target
-                        ssh -i ~/.ssh/id_ed25519_ansible -o StrictHostKeyChecking=no root@${DEPLOY_IP} '
-                            mkdir -p /opt/btd/${SERVICE_NAME}/dist
-                            mkdir -p /opt/btd/${SERVICE_NAME}/logs
-                            mkdir -p /var/log/${SERVICE_NAME}
-                        '
+                        # Create staging area on Ansible LXC
+                        DEPLOY_DIR=/tmp/jenkins-deploys/${SERVICE_NAME}/${BUILD_NUMBER}
 
-                        # Rsync dist/ to target container
+                        ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST} \
+                            "mkdir -p \${DEPLOY_DIR}/dist \${DEPLOY_DIR}/prisma \${DEPLOY_DIR}/src/proto"
+
+                        # Transfer build artifacts to Ansible LXC
                         rsync -avz --delete \
-                            -e "ssh -i ~/.ssh/id_ed25519_ansible -o StrictHostKeyChecking=no" \
+                            -e "ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no" \
                             dist/ \
-                            root@${DEPLOY_IP}:/opt/btd/${SERVICE_NAME}/dist/
+                            ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST}:\${DEPLOY_DIR}/dist/
 
-                        # Restart service if it exists
-                        ssh -i ~/.ssh/id_ed25519_ansible -o StrictHostKeyChecking=no root@${DEPLOY_IP} '
-                            if systemctl is-active --quiet ${SERVICE_NAME}; then
-                                systemctl restart ${SERVICE_NAME}
-                                echo "✅ Service restarted"
-                            else
-                                echo "ℹ️  Service not running (systemd unit may not exist yet)"
-                            fi
-                        '
+                        rsync -avz \
+                            -e "ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no" \
+                            package.json \
+                            package-lock.json \
+                            ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST}:\${DEPLOY_DIR}/
+
+                        # Transfer Prisma schema (required for prisma generate)
+                        rsync -avz \
+                            -e "ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no" \
+                            prisma/ \
+                            ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST}:\${DEPLOY_DIR}/prisma/
+
+                        # Transfer proto files (required for gRPC runtime)
+                        rsync -avz \
+                            -e "ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no" \
+                            src/proto/ \
+                            ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST}:\${DEPLOY_DIR}/src/proto/
+
+                        # Trigger Ansible deployment playbook
+                        ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST} \
+                            "cd ${ANSIBLE_LXC_DIR} && \
+                             ansible-playbook playbooks/deploy-${SERVICE_NAME}.yml \
+                                -i ${INVENTORY_FILE} \
+                                -e 'artifact_path=\${DEPLOY_DIR}' \
+                                -e 'git_commit=${GIT_COMMIT}' \
+                                -e 'build_number=${BUILD_NUMBER}' \
+                                -e 'environment=${BRANCH_TO_ENV}'"
+
+                        # Cleanup staging area
+                        ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST} \
+                            "rm -rf \${DEPLOY_DIR}"
                     """
-                }
-            }
-        }
 
-        stage('Health Check') {
-            steps {
-                script {
-                    echo "Waiting for service to start..."
-                    sleep(time: 10, unit: 'SECONDS')
-
-                    echo "Checking ${SERVICE_NAME} health endpoint..."
-
-                    retry(3) {
-                        sh """
-                            curl -f --max-time 10 \
-                                http://${DEPLOY_IP}:${HTTP_PORT}/api/v1/health \
-                                || exit 1
-                        """
-                    }
-
-                    echo "✅ ${SERVICE_NAME} is healthy!"
-                }
-            }
-        }
-
-        stage('Verify Consul Registration') {
-            steps {
-                script {
-                    echo "Checking Consul service registration..."
-
-                    sh """
-                        ssh -i ~/.ssh/id_ed25519_ansible -o StrictHostKeyChecking=no root@${DEPLOY_IP} '
-                            curl -s http://localhost:8500/v1/agent/services | \
-                            grep -q ${SERVICE_NAME} && \
-                            echo "✅ Service registered in Consul"
-                        ' || echo "⚠️  Consul registration check skipped"
-                    """
-                }
-            }
-        }
-
-        stage('Verify Service ID') {
-            steps {
-                script {
-                    echo "Verifying instance-based service ID (Phase 1 fix)..."
-
-                    sh """
-                        ssh -i ~/.ssh/id_ed25519_ansible -o StrictHostKeyChecking=no root@${DEPLOY_IP} '
-                            SERVICE_ID=\$(curl -s http://localhost:8500/v1/agent/services | \
-                                         python3 -c "import sys, json; services = json.load(sys.stdin); print([k for k in services.keys() if \"${SERVICE_NAME}\" in k][0] if any(\"${SERVICE_NAME}\" in k for k in services.keys()) else \"NOT_FOUND\")")
-
-                            echo "Service ID: \$SERVICE_ID"
-
-                            if echo "\$SERVICE_ID" | grep -q "${SERVICE_NAME}-btd-payment"; then
-                                echo "✅ Correct instance-based service ID format"
-                            else
-                                echo "⚠️  Service ID format: \$SERVICE_ID"
-                            fi
-                        ' || echo "⚠️  Service ID check skipped"
-                    """
+                    echo "✅ Deployment via Ansible completed successfully"
+                    echo "   - Environment: ${BRANCH_TO_ENV}"
+                    echo "   - Inventory: ${INVENTORY_FILE}"
+                    echo "   - Service deployed to ${DEPLOY_IP}"
+                    echo "   - Health check and Consul verification handled by Ansible"
                 }
             }
         }
@@ -212,7 +251,9 @@ pipeline {
             ✅ DEPLOYMENT SUCCESSFUL - ${SERVICE_NAME}
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             Service: ${SERVICE_NAME}
-            Container: ${DEPLOY_IP} (btd-payment-01)
+            Environment: ${BRANCH_TO_ENV}
+            Branch: ${env.BRANCH_NAME}
+            Container: ${DEPLOY_IP}
             Health: http://${DEPLOY_IP}:${HTTP_PORT}/api/v1/health
             gRPC: ${DEPLOY_IP}:${GRPC_PORT}
             Build: #${BUILD_NUMBER}
@@ -227,6 +268,8 @@ pipeline {
             ❌ DEPLOYMENT FAILED - ${SERVICE_NAME}
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             Service: ${SERVICE_NAME}
+            Environment: ${BRANCH_TO_ENV}
+            Branch: ${env.BRANCH_NAME}
             Build: #${BUILD_NUMBER}
             Check logs above for errors
             ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
