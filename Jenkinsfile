@@ -59,6 +59,14 @@ pipeline {
         }"""
     }
 
+    parameters {
+        booleanParam(
+            name: 'SKIP_TESTS',
+            defaultValue: false,
+            description: 'Skip lint and unit tests (faster deployment)'
+        )
+    }
+
     stages {
         stage('Validate Branch') {
             steps {
@@ -505,14 +513,6 @@ Check logs: ssh root@${DEPLOY_IP} 'journalctl -u ${SERVICE_NAME} -n 100'
             // Clean up workspace
             cleanWs()
         }
-    }
-
-    parameters {
-        booleanParam(
-            name: 'SKIP_TESTS',
-            defaultValue: false,
-            description: 'Skip lint and unit tests (faster deployment)'
-        )
     }
 }
 
