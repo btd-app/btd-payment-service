@@ -246,6 +246,7 @@ pipeline {
                         ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST} \
                             "cd ${ANSIBLE_LXC_DIR} && \
                              ansible-playbook playbooks/deploy-${SERVICE_NAME}.yml \
+                                -v \
                                 -i ${INVENTORY_FILE} \
                                 -e 'artifact_path=\${DEPLOY_DIR}' \
                                 -e 'git_commit=${GIT_COMMIT}' \
