@@ -234,12 +234,12 @@ pipeline {
                                 ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST}:\${DEPLOY_DIR}/
 
                         # Transfer Prisma schema if it exists (some services don't use Prisma)
-if [ -d "prisma" ]; then
-    rsync -avz \
-        -e "ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no" \
-        prisma/ \
-        ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST}:\${DEPLOY_DIR}/prisma/
-fi
+                        if [ -d "prisma" ]; then
+                            rsync -avz \
+                                -e "ssh -i ~/.ssh/id_jenkins_to_ansible -o StrictHostKeyChecking=no" \
+                                prisma/ \
+                                ${ANSIBLE_LXC_USER}@${ANSIBLE_LXC_HOST}:\${DEPLOY_DIR}/prisma/
+                        fi
 
 
                         # Trigger Ansible deployment playbook
