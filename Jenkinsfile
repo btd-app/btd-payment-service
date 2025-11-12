@@ -266,8 +266,6 @@ pipeline {
                 }
             }
         }
-    }
-
 
         stage('Post-Deployment Verification') {
             steps {
