@@ -1,6 +1,6 @@
 {
   "name": "btd-payment-service",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "",
   "author": "",
   "private": true,
@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@btd/proto": "^2.2.0",
-    "@btd/shared": "^2.1.15",
+    "@btd/shared": "^2.2.0",
     "@grpc/grpc-js": "^1.13.4",
     "@grpc/proto-loader": "^0.8.0",
     "@nestjs/axios": "^4.0.1",
