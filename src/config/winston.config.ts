@@ -5,7 +5,7 @@
  * Reduces configuration from 638 lines to ~340 lines while maintaining all functionality
  */
 
-import { BaseLogger, createWinstonLogger, createNestWinstonLogger } from '@btd/shared/dist/logging';
+import { BaseLogger, createWinstonLogger, createNestWinstonLogger } from '@btd/shared/logging';
 import { WinstonModule } from 'nest-winston';
 
 /**
