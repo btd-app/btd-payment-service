@@ -23,7 +23,7 @@
     "docker:logs": "cd .. && docker-compose -f docker-compose.yml -f docker-compose.dev.yml logs -f btd-payment"
   },
   "dependencies": {
-    "@btd/proto": "^2.2.0",
+    "@btd/proto": "^2.4.3",
     "@btd/shared": "^2.2.0",
     "@grpc/grpc-js": "^1.13.4",
     "@grpc/proto-loader": "^0.8.0",

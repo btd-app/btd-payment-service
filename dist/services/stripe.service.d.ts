@@ -40,11 +40,11 @@ export declare class StripeService {
     }>;
     getAvailablePlans(): SubscriptionPlan[];
     getCurrentSubscription(userId: string): Promise<{
-        status: import(".prisma/client").$Enums.SubscriptionStatus;
+        status: import("@prisma/client").$Enums.SubscriptionStatus;
         id: string;
         createdAt: Date;
         userId: string;
-        subscriptionTier: import(".prisma/client").$Enums.SubscriptionTier;
+        subscriptionTier: import("@prisma/client").$Enums.SubscriptionTier;
         stripeCustomerId: string | null;
         stripeSubscriptionId: string | null;
         planId: string | null;

@@ -1,7 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WinstonModule = exports.createNestWinstonLoggerInstance = exports.paymentLogger = exports.PaymentLogger = void 0;
-const logging_1 = require("@btd/shared/dist/logging");
+const logging_1 = require("@btd/shared/logging");
 const nest_winston_1 = require("nest-winston");
 Object.defineProperty(exports, "WinstonModule", { enumerable: true, get: function () { return nest_winston_1.WinstonModule; } });
 class PaymentLogger extends logging_1.BaseLogger {

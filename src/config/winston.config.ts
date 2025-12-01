@@ -5,7 +5,11 @@
  * Reduces configuration from 638 lines to ~340 lines while maintaining all functionality
  */
 
-import { BaseLogger, createWinstonLogger, createNestWinstonLogger } from '@btd/shared/logging';
+import {
+  BaseLogger,
+  createWinstonLogger,
+  createNestWinstonLogger,
+} from '@btd/shared/logging';
 import { WinstonModule } from 'nest-winston';
 
 /**
@@ -32,14 +36,18 @@ export class PaymentLogger extends BaseLogger {
     method: string,
     metadata?: Record<string, any>,
   ) {
-    this.businessInfo('payment-initiated', `Payment initiated: ${paymentId} (${amount} ${currency})`, {
-      ...metadata,
-      paymentId,
-      userId,
-      amount,
-      currency,
-      method,
-    });
+    this.businessInfo(
+      'payment-initiated',
+      `Payment initiated: ${paymentId} (${amount} ${currency})`,
+      {
+        ...metadata,
+        paymentId,
+        userId,
+        amount,
+        currency,
+        method,
+      },
+    );
   }
 
   /**
@@ -51,12 +59,16 @@ export class PaymentLogger extends BaseLogger {
     amount: number,
     metadata?: Record<string, any>,
   ) {
-    this.businessInfo('payment-processing', `Processing payment: ${paymentId} via ${provider}`, {
-      ...metadata,
-      paymentId,
-      provider,
-      amount,
-    });
+    this.businessInfo(
+      'payment-processing',
+      `Processing payment: ${paymentId} via ${provider}`,
+      {
+        ...metadata,
+        paymentId,
+        provider,
+        amount,
+      },
+    );
   }
 
   /**
@@ -88,13 +100,17 @@ export class PaymentLogger extends BaseLogger {
     error: string,
     metadata?: Record<string, any>,
   ) {
-    this.businessError('payment-failed', `Payment failed: ${paymentId} - ${error}`, {
-      ...metadata,
-      paymentId,
-      userId,
-      amount,
-      error,
-    });
+    this.businessError(
+      'payment-failed',
+      `Payment failed: ${paymentId} - ${error}`,
+      {
+        ...metadata,
+        paymentId,
+        userId,
+        amount,
+        error,
+      },
+    );
   }
 
   /**
@@ -126,13 +142,17 @@ export class PaymentLogger extends BaseLogger {
     amount: number,
     metadata?: Record<string, any>,
   ) {
-    this.businessInfo('subscription-created', `Subscription created: ${subscriptionId}`, {
-      ...metadata,
-      subscriptionId,
-      userId,
-      planId,
-      amount,
-    });
+    this.businessInfo(
+      'subscription-created',
+      `Subscription created: ${subscriptionId}`,
+      {
+        ...metadata,
+        subscriptionId,
+        userId,
+        planId,
+        amount,
+      },
+    );
   }
 
   /**
@@ -144,12 +164,16 @@ export class PaymentLogger extends BaseLogger {
     reason: string,
     metadata?: Record<string, any>,
   ) {
-    this.businessInfo('subscription-cancelled', `Subscription cancelled: ${subscriptionId}`, {
-      ...metadata,
-      subscriptionId,
-      userId,
-      reason,
-    });
+    this.businessInfo(
+      'subscription-cancelled',
+      `Subscription cancelled: ${subscriptionId}`,
+      {
+        ...metadata,
+        subscriptionId,
+        userId,
+        reason,
+      },
+    );
   }
 
   /**
@@ -161,12 +185,16 @@ export class PaymentLogger extends BaseLogger {
     amount: number,
     metadata?: Record<string, any>,
   ) {
-    this.businessInfo('subscription-renewed', `Subscription renewed: ${subscriptionId}`, {
-      ...metadata,
-      subscriptionId,
-      userId,
-      amount,
-    });
+    this.businessInfo(
+      'subscription-renewed',
+      `Subscription renewed: ${subscriptionId}`,
+      {
+        ...metadata,
+        subscriptionId,
+        userId,
+        amount,
+      },
+    );
   }
 
   /**
@@ -179,13 +207,17 @@ export class PaymentLogger extends BaseLogger {
     reason: string,
     metadata?: Record<string, any>,
   ) {
-    this.businessWarn('fraud-detected', `Fraud detected: ${paymentId} (risk: ${riskScore})`, {
-      ...metadata,
-      paymentId,
-      userId,
-      riskScore,
-      reason,
-    });
+    this.businessWarn(
+      'fraud-detected',
+      `Fraud detected: ${paymentId} (risk: ${riskScore})`,
+      {
+        ...metadata,
+        paymentId,
+        userId,
+        riskScore,
+        reason,
+      },
+    );
   }
 
   /**
@@ -198,13 +230,17 @@ export class PaymentLogger extends BaseLogger {
     reason: string,
     metadata?: Record<string, any>,
   ) {
-    this.businessWarn('chargeback-received', `Chargeback received: ${chargebackId}`, {
-      ...metadata,
-      paymentId,
-      chargebackId,
-      amount,
-      reason,
-    });
+    this.businessWarn(
+      'chargeback-received',
+      `Chargeback received: ${chargebackId}`,
+      {
+        ...metadata,
+        paymentId,
+        chargebackId,
+        amount,
+        reason,
+      },
+    );
   }
 
   /**
@@ -233,12 +269,16 @@ export class PaymentLogger extends BaseLogger {
     reason: string,
     metadata?: Record<string, any>,
   ) {
-    this.businessInfo('payment-method-removed', `Payment method removed: ${methodId}`, {
-      ...metadata,
-      userId,
-      methodId,
-      reason,
-    });
+    this.businessInfo(
+      'payment-method-removed',
+      `Payment method removed: ${methodId}`,
+      {
+        ...metadata,
+        userId,
+        methodId,
+        reason,
+      },
+    );
   }
 }
 

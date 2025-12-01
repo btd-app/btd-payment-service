@@ -1,4 +1,4 @@
-import { BaseLogger } from '@btd/shared/dist/logging';
+import { BaseLogger } from '@btd/shared/logging';
 import { WinstonModule } from 'nest-winston';
 export declare class PaymentLogger extends BaseLogger {
     constructor();

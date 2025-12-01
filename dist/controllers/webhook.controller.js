@@ -11,6 +11,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 var WebhookController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WebhookController = void 0;
@@ -18,7 +21,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const config_1 = require("@nestjs/config");
 require("../types/external");
-const stripe_1 = require("stripe");
+const stripe_1 = __importDefault(require("stripe"));
 const prisma_service_1 = require("../prisma/prisma.service");
 const client_1 = require("@prisma/client");
 let WebhookController = WebhookController_1 = class WebhookController {

@@ -8,13 +8,16 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 var ConsulServiceRegistration_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConsulServiceRegistration = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const shared_1 = require("@btd/shared");
-const axios_1 = require("axios");
+const axios_1 = __importDefault(require("axios"));
 let ConsulServiceRegistration = ConsulServiceRegistration_1 = class ConsulServiceRegistration {
     constructor(configService) {
         this.configService = configService;

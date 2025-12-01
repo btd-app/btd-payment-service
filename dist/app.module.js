@@ -5,6 +5,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
@@ -22,7 +25,7 @@ const webhook_controller_1 = require("./controllers/webhook.controller");
 const stripe_service_1 = require("./services/stripe.service");
 const subscription_service_1 = require("./services/subscription.service");
 const grpc_module_1 = require("./grpc/grpc.module");
-const stripe_config_1 = require("./config/stripe.config");
+const stripe_config_1 = __importDefault(require("./config/stripe.config"));
 const express_1 = require("express");
 const consul_service_registration_1 = require("./consul-service-registration");
 let AppModule = class AppModule {
